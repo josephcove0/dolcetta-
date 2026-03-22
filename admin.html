@@ -37,7 +37,14 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
   margin-bottom:2rem; padding-bottom:1rem; border-bottom:1px solid rgba(192,50,74,.3);
 }
 .admin-header h1 { font-size:14px; color:#fff0f2; font-weight:400; letter-spacing:3px; text-transform:uppercase; font-family:monospace; }
-.hdr-links { display:flex; gap:1rem; }
+#builtin-connections-form { margin: 1.5rem 0 2rem; padding: 1.2rem 1.4rem; background: rgba(232,130,145,.06); border: 1px solid rgba(232,130,145,.15); border-radius: 10px; }
+#builtin-connections-form h3 { font-size: 13px; color: rgba(232,130,145,.9); margin: 0 0 .8rem; letter-spacing: 1px; font-weight: 600; }
+.conn-row { display: flex; align-items: center; gap: .6rem; margin-bottom: .55rem; }
+.conn-row .conn-name { font-size: 11px; color: rgba(245,200,210,.75); font-family: monospace; width: 180px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conn-row select { flex: 1; background: rgba(10,4,18,.7); color: rgba(245,200,210,.9); border: 1px solid rgba(232,130,145,.2); border-radius: 6px; padding: .3rem .5rem; font-size: 11px; font-family: monospace; }
+#save-conn-btn { margin-top: .8rem; background: rgba(232,130,145,.15); color: #e88295; border: 1px solid rgba(232,130,145,.3); border-radius: 8px; padding: .5rem 1.2rem; font-size: 12px; letter-spacing: 1px; cursor: pointer; font-family: monospace; }
+#save-conn-btn:hover { background: rgba(232,130,145,.25); }
+#conn-status { font-size: 11px; font-family: monospace; margin-top: .5rem; color: rgba(245,200,210,.5); }
 .hdr-links a, .hdr-links button { font-size:11px; color:rgba(232,82,106,.55); font-family:monospace; text-decoration:none; letter-spacing:1px; background:none; border:none; cursor:pointer; }
 .hdr-links a:hover, .hdr-links button:hover { color:#e8526a; }
 
@@ -136,6 +143,14 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
     <div class="sec-title">all memories</div>
     <div id="memory-list"><div style="font-size:12px;color:rgba(245,160,174,.3);font-family:monospace;padding:.5rem 0;">loading...</div></div>
 
+    <div id="builtin-connections-form">
+      <h3>✦ built-in connections</h3>
+      <div class="field-hint" style="margin-bottom:1rem;">chain built-in memories together — pick a memory and choose which one it connects to. leave blank to remove a connection.</div>
+      <div id="builtin-conn-rows"></div>
+      <button id="save-conn-btn" onclick="saveBuiltinConnections()">save connections</button>
+      <div id="conn-status"></div>
+    </div>
+
     <div id="add-form">
       <h3>+ new memory</h3>
 
@@ -201,6 +216,8 @@ const BUILTINS = [
 ];
 
 let extras=[], photo64=null, selSzVal=1.8, sha=null, token=null, tmpPw=null;
+let builtinConns={}, builtinConnSha=null; // index→index connections for built-in memories
+const CONN_FILE = 'connections.json';
 
 // ── CRYPTO ────────────────────────────────────────────────────────────────────
 async function deriveKey(pw){
@@ -288,7 +305,12 @@ async function loadMemories(){
     sha=d.sha;
     extras=JSON.parse(decodeURIComponent(escape(atob(d.content.replace(/\n/g,'')))));
   } catch{ extras=[]; sha=null; }
-  renderList(); buildConnectDropdown();
+  try {
+    const d=await ghGet(CONN_FILE);
+    builtinConnSha=d.sha;
+    builtinConns=JSON.parse(decodeURIComponent(escape(atob(d.content.replace(/\n/g,'')))));
+  } catch{ builtinConns={}; builtinConnSha=null; }
+  renderList(); buildConnectDropdown(); renderBuiltinConnRows();
 }
 
 function renderList(){
@@ -313,6 +335,47 @@ function renderList(){
     </div>`;
   });
   el.innerHTML=h;
+}
+
+function renderBuiltinConnRows(){
+  const container = document.getElementById('builtin-conn-rows');
+  const names = allNames();
+  let h = '';
+  BUILTINS.forEach((name, i) => {
+    const current = builtinConns[i] !== undefined ? parseInt(builtinConns[i]) : '';
+    let opts = '<option value="">— no connection —</option>';
+    names.forEach((n, j) => {
+      if (j === i) return; // can't connect to itself
+      opts += `<option value="${j}" ${current===j?'selected':''}>${n}</option>`;
+    });
+    h += `<div class="conn-row">
+      <div class="conn-name" title="${name}">${name}</div>
+      <span style="color:rgba(232,130,145,.4);font-size:11px;">→</span>
+      <select id="bc-${i}">${opts}</select>
+    </div>`;
+  });
+  container.innerHTML = h;
+}
+
+async function saveBuiltinConnections(){
+  const cst = s => document.getElementById('conn-status').textContent = s;
+  document.getElementById('save-conn-btn').disabled = true;
+  cst('saving...');
+  try {
+    const newConns = {};
+    BUILTINS.forEach((_, i) => {
+      const v = document.getElementById(`bc-${i}`).value;
+      if (v !== '') newConns[i] = parseInt(v);
+    });
+    const json = JSON.stringify(newConns, null, 2);
+    if (!builtinConnSha) { try{ const d=await ghGet(CONN_FILE); builtinConnSha=d.sha; }catch{} }
+    await ghPut(CONN_FILE, json, builtinConnSha, 'update builtin connections');
+    builtinConns = newConns;
+    await loadMemories();
+    cst('✦ saved');
+    setTimeout(()=>cst(''), 3000);
+  } catch(e){ cst('error: '+e.message); }
+  document.getElementById('save-conn-btn').disabled = false;
 }
 
 function allNames(){ return [...BUILTINS, ...extras.map(m=>m.name)]; }
