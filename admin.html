@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>admin · dolcetta</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+  min-height:100%; background:#00010f;
+  font-family:'Georgia', serif; color:#fde8eb;
+}
+
+/* ── LOGIN ── */
+#login-screen {
+  position:fixed; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  background:#00010f;
+}
+.login-box {
+  text-align:center; max-width:320px; width:90%; padding:2rem;
+  background:#1a0308; border:1px solid #c0324a; border-radius:16px;
+}
+.login-box h2 { font-size:16px; color:#fff0f2; margin-bottom:.5rem; letter-spacing:2px; font-weight:400; }
+.login-box p { font-size:11px; color:rgba(245,160,174,.5); margin-bottom:1.5rem; font-family:monospace; }
+.login-box input {
+  width:100%; padding:10px 14px; background:rgba(255,255,255,.05);
+  border:1px solid rgba(232,82,106,.35); border-radius:8px;
+  color:#fde8eb; font-size:14px; outline:none; margin-bottom:1rem;
+  font-family:monospace; letter-spacing:3px; text-align:center;
+}
+.login-box input:focus { border-color:#e8526a; }
+.login-box button {
+  width:100%; padding:11px; background:transparent;
+  border:1px solid #e8526a; color:#e8526a; border-radius:30px;
+  font-size:12px; letter-spacing:2px; font-family:monospace; cursor:pointer;
+  transition:all .3s;
+}
+.login-box button:hover { background:#e8526a; color:#150003; }
+.login-error { font-size:11px; color:#e8526a; margin-top:.8rem; min-height:1rem; font-family:monospace; }
+
+/* ── ADMIN UI ── */
+#admin-ui { display:none; max-width:600px; margin:0 auto; padding:2rem 1.5rem 4rem; }
+.admin-header {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:2rem; padding-bottom:1rem;
+  border-bottom:1px solid rgba(192,50,74,.3);
+}
+.admin-header h1 { font-size:16px; color:#fff0f2; font-weight:400; letter-spacing:3px; text-transform:uppercase; }
+.admin-header a {
+  font-size:11px; color:rgba(232,82,106,.6); font-family:monospace;
+  text-decoration:none; letter-spacing:1px;
+}
+.admin-header a:hover { color:#e8526a; }
+
+/* Memory list */
+.section-title {
+  font-size:11px; color:rgba(232,82,106,.6); letter-spacing:2px;
+  text-transform:uppercase; font-family:monospace; margin-bottom:1rem;
+}
+#memory-list { display:flex; flex-direction:column; gap:8px; margin-bottom:2.5rem; }
+.memory-card {
+  background:#1a0308; border:1px solid rgba(192,50,74,.3);
+  border-radius:10px; padding:.9rem 1rem;
+  display:flex; align-items:flex-start; justify-content:space-between; gap:.8rem;
+}
+.memory-card.builtin { opacity:.45; }
+.memory-card-info { flex:1; min-width:0; }
+.memory-card-name { font-size:13px; color:#fff0f2; margin-bottom:.25rem; }
+.memory-card-preview {
+  font-size:11px; color:rgba(245,160,174,.55); font-style:italic;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.memory-card-tag {
+  font-size:9px; font-family:monospace; letter-spacing:1px;
+  padding:2px 7px; border-radius:10px; white-space:nowrap; flex-shrink:0;
+}
+.tag-builtin { background:rgba(232,82,106,.12); color:rgba(232,82,106,.5); }
+.tag-added   { background:rgba(255,215,80,.15);  color:#f0c060; }
+.delete-btn {
+  background:none; border:none; color:rgba(232,82,106,.4);
+  font-size:16px; cursor:pointer; padding:0 4px; line-height:1;
+  flex-shrink:0; transition:color .2s;
+}
+.delete-btn:hover { color:#e8526a; }
+
+/* Add form */
+#add-form {
+  background:#1a0308; border:1px solid rgba(192,50,74,.4);
+  border-radius:14px; padding:1.5rem;
+}
+#add-form h3 { font-size:13px; color:#fff0f2; font-weight:400; letter-spacing:2px; margin-bottom:1.2rem; text-transform:uppercase; font-family:monospace; }
+.field { margin-bottom:1.1rem; }
+.field label { display:block; font-size:10px; color:rgba(232,82,106,.7); letter-spacing:1.5px; text-transform:uppercase; font-family:monospace; margin-bottom:.4rem; }
+.field input[type="text"],
+.field textarea {
+  width:100%; padding:10px 12px;
+  background:rgba(255,255,255,.04); border:1px solid rgba(232,82,106,.3);
+  border-radius:8px; color:#fde8eb; font-size:14px;
+  font-family:'Georgia',serif; outline:none; resize:vertical;
+  transition:border-color .2s;
+}
+.field input[type="text"]:focus,
+.field textarea:focus { border-color:#e8526a; }
+.field textarea { min-height:90px; line-height:1.65; }
+.field .hint { font-size:10px; color:rgba(245,160,174,.4); font-family:monospace; margin-top:.35rem; }
+
+/* Photo upload */
+.photo-drop {
+  border:1px dashed rgba(232,82,106,.35); border-radius:10px;
+  padding:1.2rem; text-align:center; cursor:pointer;
+  transition:border-color .2s, background .2s; position:relative;
+  min-height:80px; display:flex; align-items:center; justify-content:center;
+  flex-direction:column; gap:.4rem;
+}
+.photo-drop:hover, .photo-drop.dragover { border-color:#e8526a; background:rgba(232,82,106,.06); }
+.photo-drop input[type="file"] { position:absolute; inset:0; opacity:0; cursor:pointer; }
+.photo-drop-text { font-size:12px; color:rgba(245,160,174,.55); font-family:monospace; }
+.photo-drop-sub  { font-size:10px; color:rgba(245,160,174,.3);  font-family:monospace; }
+#photo-preview {
+  max-width:100%; max-height:160px; border-radius:8px;
+  margin-top:.8rem; display:none; object-fit:cover;
+}
+.remove-photo {
+  font-size:10px; color:rgba(232,82,106,.6); background:none; border:none;
+  cursor:pointer; font-family:monospace; display:none; margin-top:.4rem;
+}
+.remove-photo:hover { color:#e8526a; }
+
+/* Size selector */
+.size-opts { display:flex; gap:8px; }
+.size-opt {
+  flex:1; padding:7px; text-align:center;
+  border:1px solid rgba(232,82,106,.3); border-radius:8px;
+  cursor:pointer; font-family:monospace; font-size:11px; color:rgba(245,160,174,.6);
+  transition:all .2s;
+}
+.size-opt.selected,
+.size-opt:hover { border-color:#e8526a; color:#e8526a; background:rgba(232,82,106,.08); }
+
+/* Save button */
+#save-btn {
+  width:100%; padding:13px; margin-top:1.2rem;
+  background:transparent; border:1px solid #e8526a;
+  color:#e8526a; border-radius:30px; font-size:13px;
+  letter-spacing:2px; font-family:monospace; cursor:pointer;
+  transition:all .3s;
+}
+#save-btn:hover:not(:disabled) { background:#e8526a; color:#150003; }
+#save-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+/* Status */
+#status {
+  margin-top:1rem; font-size:12px; font-family:monospace;
+  text-align:center; min-height:1.2rem; letter-spacing:1px;
+}
+#status.ok  { color:#5dcaa5; }
+#status.err { color:#e8526a; }
+#status.working { color:rgba(245,160,174,.6); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <h2>✦ admin</h2>
+    <p>for dolcetta · private access</p>
+    <input type="password" id="pw-input" placeholder="password" onkeydown="if(event.key==='Enter')tryLogin()">
+    <button onclick="tryLogin()">enter</button>
+    <div class="login-error" id="login-err"></div>
+  </div>
+</div>
+
+<!-- ADMIN UI -->
+<div id="admin-ui">
+  <div class="admin-header">
+    <h1>✦ memory editor</h1>
+    <a href="./index.html" target="_blank">↗ open the sky</a>
+  </div>
+
+  <!-- Existing memories -->
+  <div class="section-title">all memories</div>
+  <div id="memory-list">
+    <div style="font-size:12px;color:rgba(245,160,174,.4);font-family:monospace;padding:.5rem 0;">loading...</div>
+  </div>
+
+  <!-- Add new memory -->
+  <div id="add-form">
+    <h3>+ add memory</h3>
+
+    <div class="field">
+      <label>memory name</label>
+      <input type="text" id="f-name" placeholder="e.g. The Rooftop Night">
+    </div>
+
+    <div class="field">
+      <label>text</label>
+      <textarea id="f-text" placeholder="what happened, how it felt, why it matters..."></textarea>
+    </div>
+
+    <div class="field">
+      <label>photo <span style="opacity:.5">(optional)</span></label>
+      <div class="photo-drop" id="photo-drop">
+        <input type="file" id="f-photo" accept="image/*" onchange="handlePhoto(this)">
+        <div class="photo-drop-text">tap to choose a photo</div>
+        <div class="photo-drop-sub">jpg, png, webp · will be embedded</div>
+      </div>
+      <img id="photo-preview" alt="preview">
+      <button class="remove-photo" id="remove-photo-btn" onclick="removePhoto()">✕ remove photo</button>
+    </div>
+
+    <div class="field">
+      <label>star size</label>
+      <div class="size-opts">
+        <div class="size-opt" onclick="selectSize(1.5)" data-sz="1.5">small</div>
+        <div class="size-opt selected" onclick="selectSize(1.8)" data-sz="1.8">medium</div>
+        <div class="size-opt" onclick="selectSize(2.2)" data-sz="2.2">large</div>
+      </div>
+    </div>
+
+    <button id="save-btn" onclick="saveMemory()">✦ add to the sky</button>
+    <div id="status"></div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+const GITHUB_TOKEN = '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';
+const REPO_OWNER   = 'josephcove0';
+const REPO_NAME    = 'dolcetta-';
+const FILE_PATH    = 'memories.json';
+const ADMIN_PASS   = 'dolcetta2025'; // change this to whatever you want
+
+// Built-in memory names (just for display — can't delete these)
+const BUILTIN_NAMES = [
+  "The Instagram Story","The Airport Text","The Black Hole Talk",
+  "I Couldn't Stop Looking","7aga fel dein","Our First Photo",
+  "The Cinema Date","Pizza After","The Monday Confession","Not Yet",
+  "November 17th","Would you be my girlfriend? 🤨","The Real Proposal",
+  "Holding Your Hand","Sleeping on My Lap","The Pizza Video",
+  "Your Scent","Your Love Letter","Before We Were Dating"
+];
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let extraMemories = [];   // loaded from memories.json
+let photoBase64   = null; // current photo being added
+let selectedSz    = 1.8;
+let fileSha       = null; // GitHub file SHA needed for updates
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+function tryLogin(){
+  const val = document.getElementById('pw-input').value;
+  if(val === ADMIN_PASS){
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('admin-ui').style.display = 'block';
+    loadMemories();
+  } else {
+    document.getElementById('login-err').textContent = 'wrong password';
+    document.getElementById('pw-input').value = '';
+    setTimeout(()=>document.getElementById('login-err').textContent='', 2000);
+  }
+}
+document.getElementById('pw-input').addEventListener('keydown', e=>{
+  if(e.key==='Enter') tryLogin();
+});
+
+// ── GITHUB API ────────────────────────────────────────────────────────────────
+async function ghGet(path){
+  const r = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`,{
+    headers:{ Authorization:`token ${GITHUB_TOKEN}`, Accept:'application/vnd.github.v3+json' }
+  });
+  if(!r.ok) throw new Error(`GitHub GET failed: ${r.status}`);
+  return r.json();
+}
+
+async function ghPut(path, content, sha, message){
+  const r = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`,{
+    method:'PUT',
+    headers:{ Authorization:`token ${GITHUB_TOKEN}`, Accept:'application/vnd.github.v3+json', 'Content-Type':'application/json' },
+    body: JSON.stringify({ message, content: btoa(unescape(encodeURIComponent(content))), sha })
+  });
+  if(!r.ok){
+    const e = await r.json();
+    throw new Error(e.message || `GitHub PUT failed: ${r.status}`);
+  }
+  return r.json();
+}
+
+// ── LOAD ──────────────────────────────────────────────────────────────────────
+async function loadMemories(){
+  try {
+    const data = await ghGet(FILE_PATH);
+    fileSha = data.sha;
+    const decoded = decodeURIComponent(escape(atob(data.content.replace(/\n/g,''))));
+    extraMemories = JSON.parse(decoded) || [];
+  } catch(e){
+    // File might not exist yet
+    extraMemories = [];
+    fileSha = null;
+  }
+  renderList();
+}
+
+function renderList(){
+  const list = document.getElementById('memory-list');
+  let html = '';
+
+  // Built-ins
+  BUILTIN_NAMES.forEach(name => {
+    html += `<div class="memory-card builtin">
+      <div class="memory-card-info">
+        <div class="memory-card-name">${name}</div>
+        <div class="memory-card-preview">built-in memory</div>
+      </div>
+      <span class="memory-card-tag tag-builtin">built-in</span>
+    </div>`;
+  });
+
+  // Added memories
+  extraMemories.forEach((m, idx) => {
+    const preview = m.text ? m.text.slice(0,60)+'...' : '(no text)';
+    const hasPhoto = m.photo ? '📷 ' : '';
+    html += `<div class="memory-card">
+      <div class="memory-card-info">
+        <div class="memory-card-name">${hasPhoto}${m.name}</div>
+        <div class="memory-card-preview">${preview}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        <span class="memory-card-tag tag-added">added</span>
+        <button class="delete-btn" onclick="deleteMemory(${idx})" title="remove">✕</button>
+      </div>
+    </div>`;
+  });
+
+  list.innerHTML = html;
+}
+
+// ── PHOTO ─────────────────────────────────────────────────────────────────────
+function handlePhoto(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    photoBase64 = e.target.result; // full data URL
+    document.getElementById('photo-preview').src = photoBase64;
+    document.getElementById('photo-preview').style.display = 'block';
+    document.getElementById('remove-photo-btn').style.display = 'inline';
+    document.querySelector('.photo-drop-text').textContent = file.name;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removePhoto(){
+  photoBase64 = null;
+  document.getElementById('f-photo').value = '';
+  document.getElementById('photo-preview').style.display = 'none';
+  document.getElementById('remove-photo-btn').style.display = 'none';
+  document.querySelector('.photo-drop-text').textContent = 'tap to choose a photo';
+}
+
+function selectSize(sz){
+  selectedSz = sz;
+  document.querySelectorAll('.size-opt').forEach(el => {
+    el.classList.toggle('selected', parseFloat(el.dataset.sz) === sz);
+  });
+}
+
+// ── SAVE ──────────────────────────────────────────────────────────────────────
+async function saveMemory(){
+  const name = document.getElementById('f-name').value.trim();
+  const text = document.getElementById('f-text').value.trim();
+
+  if(!name){ setStatus('give it a name first','err'); return; }
+  if(!text){ setStatus('write something for her','err'); return; }
+
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  setStatus('saving to the sky...','working');
+
+  try {
+    // Build the new memory object
+    const newMem = { name, text, sz: selectedSz };
+    if(photoBase64) newMem.photo = photoBase64;
+
+    const updated = [...extraMemories, newMem];
+    const json = JSON.stringify(updated, null, 2);
+
+    // If we don't have a SHA yet, try fetching it first
+    if(!fileSha){
+      try {
+        const data = await ghGet(FILE_PATH);
+        fileSha = data.sha;
+      } catch(e){ /* file doesn't exist yet, that's fine */ }
+    }
+
+    await ghPut(FILE_PATH, json, fileSha, `add memory: ${name}`);
+
+    // Reload to get new SHA
+    await loadMemories();
+
+    // Clear form
+    document.getElementById('f-name').value = '';
+    document.getElementById('f-text').value = '';
+    removePhoto();
+    selectSize(1.8);
+
+    setStatus('✦ added to the sky', 'ok');
+    setTimeout(()=>setStatus('',''), 3000);
+  } catch(e){
+    setStatus('error: '+e.message, 'err');
+    btn.disabled = false;
+  }
+
+  btn.disabled = false;
+}
+
+// ── DELETE ────────────────────────────────────────────────────────────────────
+async function deleteMemory(idx){
+  if(!confirm(`Remove "${extraMemories[idx].name}"?`)) return;
+
+  setStatus('removing...','working');
+  try {
+    const updated = extraMemories.filter((_,i)=>i!==idx);
+    const json = JSON.stringify(updated, null, 2);
+
+    if(!fileSha){
+      const data = await ghGet(FILE_PATH);
+      fileSha = data.sha;
+    }
+
+    await ghPut(FILE_PATH, json, fileSha, `remove memory: ${extraMemories[idx].name}`);
+    await loadMemories();
+    setStatus('removed','ok');
+    setTimeout(()=>setStatus('',''), 2000);
+  } catch(e){
+    setStatus('error: '+e.message,'err');
+  }
+}
+
+function setStatus(msg, type){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = type || '';
+}
+
+// Drag-over styling for photo drop
+const drop = document.getElementById('photo-drop');
+drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.classList.add('dragover'); });
+drop.addEventListener('dragleave', ()=>drop.classList.remove('dragover'));
+drop.addEventListener('drop', e=>{
+  e.preventDefault(); drop.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if(file && file.type.startsWith('image/')){
+    const reader = new FileReader();
+    reader.onload = ev => {
+      photoBase64 = ev.target.result;
+      document.getElementById('photo-preview').src = photoBase64;
+      document.getElementById('photo-preview').style.display = 'block';
+      document.getElementById('remove-photo-btn').style.display = 'inline';
+      document.querySelector('.photo-drop-text').textContent = file.name;
+    };
+    reader.readAsDataURL(file);
+  }
+});
+</script>
+</body>
+</html>
