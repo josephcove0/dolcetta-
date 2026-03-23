@@ -400,6 +400,22 @@ html, body { width:100%; height:100%; overflow:hidden; background:#00010f; font-
   height:100%; background:#e8526a; border-radius:2px;
   transition:width .25s linear; width:0%;
 }
+/* ── SUPERNOVA FLASH OVERLAY ─────────────────────────────────────────────── */
+#supernova-flash {
+  position:fixed; inset:0; z-index:25;
+  pointer-events:none;
+  background:radial-gradient(ellipse at center,
+    rgba(255,248,235,1)   0%,
+    rgba(255,225,180,0.9) 18%,
+    rgba(232,130,145,0.6) 42%,
+    rgba(100,40,80,0.25)  68%,
+    rgba(0,0,0,0)         100%
+  );
+  opacity:0;
+  mix-blend-mode:screen;
+  will-change:opacity;
+}
+
 /* Loading screen */
 #loader {
   position:fixed; inset:0; z-index:100;
@@ -587,6 +603,7 @@ html, body { width:100%; height:100%; overflow:hidden; background:#00010f; font-
 
 <div id="sky">
   <canvas id="sky-canvas"></canvas>
+  <div id="supernova-flash"></div>
   <div id="hud">
     <span id="nav-hint">drag to explore · click a glowing star</span>
     <span id="star-counter">0 / 0</span>
@@ -956,6 +973,7 @@ let lastTouchTime = 0;
 let modalOpenedAt = 0;
 let newStarAnimations = [];
 let supernovaBursts = [];
+let supernovaFlashes = [];   // full-screen brightness flashes
 let burstTexture = null;
 
 function makeSupernovaCanvas(){
@@ -1130,6 +1148,7 @@ function queueNewStarReveal(idx){
   burst.renderOrder = 8;
   scene.add(burst);
   supernovaBursts.push({ sprite: burst, idx, start: performance.now(), duration: 1350 });
+  supernovaFlashes.push({ start: performance.now(), duration: 2400 });
 }
 
 function updateNewStarAnimations(now){
@@ -1168,6 +1187,32 @@ function updateNewStarAnimations(now){
       supernovaBursts.splice(i,1);
     }
   }
+}
+
+function updateSupernovaFlash(now) {
+  const flashEl = document.getElementById('supernova-flash');
+  if (!flashEl) return;
+
+  let totalBrightness = 0;
+
+  for (let i = supernovaFlashes.length - 1; i >= 0; i--) {
+    const f = supernovaFlashes[i];
+    const p = (now - f.start) / f.duration;
+    if (p >= 1) { supernovaFlashes.splice(i, 1); continue; }
+
+    // Curve: ultra-fast ramp to peak (0-6% = ~144ms), then long warm decay
+    // Mimics real supernova light curve: sharp rise, exponential-ish tail
+    let brightness;
+    if (p < 0.06) {
+      brightness = p / 0.06;                              // attack
+    } else {
+      const dp = (p - 0.06) / 0.94;
+      brightness = Math.pow(1 - dp, 1.8) * (1 + dp * 0.4); // shoulder + decay
+    }
+    totalBrightness += brightness;
+  }
+
+  flashEl.style.opacity = Math.min(1, totalBrightness).toFixed(4);
 }
 
 function updateMemoryCounterUI(){
@@ -1855,6 +1900,7 @@ function animate(now=0){
   updateTwinkle(t);
   updateShooters(dt,now);
   updateNewStarAnimations(now);
+  updateSupernovaFlash(now);
 
   // Memory star pulse
   Object.keys(sprites).forEach(idx=>{
@@ -2154,21 +2200,19 @@ nextShooterAt=performance.now()+5000;
 let _pendingExtra = [], _pendingBuiltinConns = {};
 let _remoteFetchNonce = 0;
 
-// Fetch via GitHub Contents API (same endpoint the admin uses — no CORS issues)
-const _OWNER = 'josephcove0', _REPO = 'dolcetta-';
+// Fetch via raw.githubusercontent.com — no rate limits (public CDN), CORS-friendly.
+// The ?t= bust forces a fresh CDN response each time without touching the API quota.
+const _OWNER = 'josephcove0', _REPO = 'dolcetta-', _BRANCH = 'main';
 function ghFetch(file, bust = '') {
   const qs = bust ? ('?t=' + encodeURIComponent(bust)) : '';
-  return fetch('https://api.github.com/repos/' + _OWNER + '/' + _REPO + '/contents/' + file + qs, {
-    headers: {
-      Accept: 'application/vnd.github.v3+json',
-      'Cache-Control': 'no-cache'
-    },
-    cache: 'no-store'
-  })
-  .then(r => r.ok ? r.json() : null)
-  .then(d => {
-    if (!d || !d.content) return null;
-    try { return JSON.parse(atob(d.content.split('\n').join(''))); } catch { return null; }
+  return fetch(
+    `https://raw.githubusercontent.com/${_OWNER}/${_REPO}/${_BRANCH}/${file}${qs}`,
+    { cache: 'no-store' }
+  )
+  .then(r => r.ok ? r.text() : null)
+  .then(text => {
+    if (!text) return null;
+    try { return JSON.parse(text); } catch { return null; }
   })
   .catch(() => null);
 }
@@ -2176,20 +2220,33 @@ function ghFetch(file, bust = '') {
 async function refreshRemoteMemories(rebuildIfReady = true) {
   const bust = `${Date.now()}-${++_remoteFetchNonce}`;
   const prevExtraSig = JSON.stringify(_pendingExtra || []);
-  const prevConnSig = JSON.stringify(_pendingBuiltinConns || {});
+  const prevConnSig  = JSON.stringify(_pendingBuiltinConns || {});
   const t0 = performance.now();
   if (window._dbg) window._dbg('poll_fire', { nonce: _remoteFetchNonce });
 
-  const [extra, builtinConns] = await Promise.all([
-    ghFetch('memories.json', bust).then(d => Array.isArray(d) ? d : []),
-    ghFetch('connections.json', bust).then(d => (d && typeof d === 'object' && !Array.isArray(d)) ? d : {})
+  const [rawExtra, rawConns] = await Promise.all([
+    ghFetch('memories.json',   bust),
+    ghFetch('connections.json', bust)
   ]);
 
-  _pendingExtra = extra || [];
-  _pendingBuiltinConns = (builtinConns && typeof builtinConns === 'object') ? builtinConns : {};
+  // Only update state when the fetch actually returned valid data.
+  // A failed/rate-limited fetch returns null — keep previous state intact.
+  const extraOk = Array.isArray(rawExtra);
+  const connsOk = rawConns && typeof rawConns === 'object' && !Array.isArray(rawConns);
+  if (extraOk) _pendingExtra       = rawExtra;
+  if (connsOk) _pendingBuiltinConns = rawConns;
 
-  const changed = JSON.stringify(_pendingExtra) !== prevExtraSig || JSON.stringify(_pendingBuiltinConns) !== prevConnSig;
-  if (window._dbg) window._dbg('poll_done', { ms: Math.round(performance.now()-t0), changed, extras: _pendingExtra.length, conns: Object.keys(_pendingBuiltinConns).length });
+  const newExtraSig = JSON.stringify(_pendingExtra);
+  const newConnSig  = JSON.stringify(_pendingBuiltinConns);
+  const changed = newExtraSig !== prevExtraSig || newConnSig !== prevConnSig;
+
+  if (window._dbg) window._dbg('poll_done', {
+    ms: Math.round(performance.now() - t0),
+    changed,
+    extraOk, connsOk,
+    extras: _pendingExtra.length,
+    conns:  Object.keys(_pendingBuiltinConns).length
+  });
 
   if (changed && typeof scene !== 'undefined' && scene && rebuildIfReady) {
     applyConnectionsAndCluster();
@@ -2450,9 +2507,10 @@ function applyConnectionsAndCluster() {
         state.lastPollMs   = data.ms;
         state.lastPollTime = new Date();
         state.lastResult   = data.changed ? 'CHANGED' : 'no change';
+        const fetchStatus = (data.extraOk && data.connsOk) ? '' : ' ⚠ fetch failed';
         log(
-          `poll #${state.pollCount} done in ${data.ms}ms — ${state.lastResult} (extras: ${data.extras}, conns: ${data.conns})`,
-          data.changed ? 'ok' : ''
+          `poll #${state.pollCount} — ${state.lastResult} in ${data.ms}ms (extras:${data.extras} conns:${data.conns})${fetchStatus}`,
+          data.changed ? 'ok' : (fetchStatus ? 'err' : '')
         );
         break;
       case 'supernova':
@@ -2572,21 +2630,26 @@ function applyConnectionsAndCluster() {
   };
 
   document.getElementById('dbg-check-gh').onclick = async () => {
-    log('checking GitHub rate limit…', 'info');
+    log('testing raw.githubusercontent.com fetch…', 'info');
     try {
-      const r = await fetch('https://api.github.com/rate_limit', {
-        headers: { Accept: 'application/vnd.github.v3+json' }
-      });
-      const d    = await r.json();
-      const core = d.resources && d.resources.core;
-      if (core) {
-        state.ghLimit     = core.limit;
-        state.ghRemaining = core.remaining;
-        state.ghReset     = new Date(core.reset * 1000).toTimeString().slice(0,8);
-        log(`rate limit: ${core.remaining}/${core.limit} — resets ${state.ghReset}`,
-            core.remaining > 10 ? 'ok' : 'warn');
+      const t0 = performance.now();
+      const r = await fetch(
+        `https://raw.githubusercontent.com/${_OWNER}/${_REPO}/${_BRANCH}/memories.json?t=${Date.now()}`,
+        { cache: 'no-store' }
+      );
+      const ms = Math.round(performance.now() - t0);
+      if (r.ok) {
+        const text = await r.text();
+        let parsed; try { parsed = JSON.parse(text); } catch { parsed = null; }
+        const count = Array.isArray(parsed) ? parsed.length : '?';
+        state.ghLimit     = 'raw CDN (no limit)';
+        state.ghRemaining = 'unlimited';
+        state.ghReset     = '—';
+        log(`raw fetch OK in ${ms}ms — memories.json has ${count} extra memories`, 'ok');
+      } else {
+        log(`raw fetch FAILED: HTTP ${r.status}`, 'err');
       }
-    } catch(e) { log('rate limit fetch failed: ' + e.message, 'err'); }
+    } catch(e) { log('raw fetch error: ' + e.message, 'err'); }
   };
 
   document.getElementById('dbg-clear-log').onclick = () => {
