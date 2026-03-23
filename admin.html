@@ -7,34 +7,31 @@
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; color:#fde8eb; }
-
 .centered { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#00010f; }
-
 .auth-box {
-  text-align:center; max-width:340px; width:92%; padding:2rem;
-  background:#1a0308; border:1px solid #c0324a; border-radius:16px;
+text-align:center; max-width:340px; width:92%; padding:2rem;
+background:#1a0308; border:1px solid #c0324a; border-radius:16px;
 }
 .auth-box h2 { font-size:14px; color:#fff0f2; margin-bottom:.4rem; letter-spacing:2px; font-weight:400; font-family:monospace; text-transform:uppercase; }
-.auth-box p  { font-size:11px; color:rgba(245,160,174,.4); margin-bottom:1.5rem; font-family:monospace; line-height:1.7; }
+.auth-box p { font-size:11px; color:rgba(245,160,174,.4); margin-bottom:1.5rem; font-family:monospace; line-height:1.7; }
 .auth-box input {
-  width:100%; padding:11px 14px; background:rgba(255,255,255,.05);
-  border:1px solid rgba(232,82,106,.35); border-radius:8px; color:#fde8eb;
-  font-size:13px; outline:none; margin-bottom:.8rem; font-family:monospace; text-align:center;
+width:100%; padding:11px 14px; background:rgba(255,255,255,.05);
+border:1px solid rgba(232,82,106,.35); border-radius:8px; color:#fde8eb;
+font-size:13px; outline:none; margin-bottom:.8rem; font-family:monospace; text-align:center;
 }
 .auth-box input:focus { border-color:#e8526a; }
 .auth-box .main-btn {
-  width:100%; padding:11px; background:transparent; border:1px solid #e8526a;
-  color:#e8526a; border-radius:30px; font-size:12px; letter-spacing:2px;
-  font-family:monospace; cursor:pointer; transition:all .3s; margin-top:.3rem;
+width:100%; padding:11px; background:transparent; border:1px solid #e8526a;
+color:#e8526a; border-radius:30px; font-size:12px; letter-spacing:2px;
+font-family:monospace; cursor:pointer; transition:all .3s; margin-top:.3rem;
 }
 .auth-box .main-btn:hover { background:#e8526a; color:#150003; }
-.err-msg { font-size:11px; color:#e8526a;  margin-top:.7rem; min-height:1rem; font-family:monospace; }
-.ok-msg  { font-size:11px; color:#5dcaa5; margin-top:.7rem; min-height:1rem; font-family:monospace; }
-
+.err-msg { font-size:11px; color:#e8526a; margin-top:.7rem; min-height:1rem; font-family:monospace; }
+.ok-msg { font-size:11px; color:#5dcaa5; margin-top:.7rem; min-height:1rem; font-family:monospace; }
 #admin-ui { max-width:640px; margin:0 auto; padding:2rem 1.5rem 5rem; }
 .admin-header {
-  display:flex; align-items:center; justify-content:space-between;
-  margin-bottom:2rem; padding-bottom:1rem; border-bottom:1px solid rgba(192,50,74,.3);
+display:flex; align-items:center; justify-content:space-between;
+margin-bottom:2rem; padding-bottom:1rem; border-bottom:1px solid rgba(192,50,74,.3);
 }
 .admin-header h1 { font-size:14px; color:#fff0f2; font-weight:400; letter-spacing:3px; text-transform:uppercase; font-family:monospace; }
 #builtin-connections-form { margin: 1.5rem 0 2rem; padding: 1.2rem 1.4rem; background: rgba(232,130,145,.06); border: 1px solid rgba(232,130,145,.15); border-radius: 10px; }
@@ -47,9 +44,7 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
 #conn-status { font-size: 11px; font-family: monospace; margin-top: .5rem; color: rgba(245,200,210,.5); }
 .hdr-links a, .hdr-links button { font-size:11px; color:rgba(232,82,106,.55); font-family:monospace; text-decoration:none; letter-spacing:1px; background:none; border:none; cursor:pointer; }
 .hdr-links a:hover, .hdr-links button:hover { color:#e8526a; }
-
 .sec-title { font-size:10px; color:rgba(232,82,106,.55); letter-spacing:2px; text-transform:uppercase; font-family:monospace; margin-bottom:1rem; }
-
 #memory-list { display:flex; flex-direction:column; gap:7px; margin-bottom:2.5rem; }
 .mc { background:#1a0308; border:1px solid rgba(192,50,74,.22); border-radius:10px; padding:.8rem 1rem; display:flex; align-items:flex-start; justify-content:space-between; gap:.8rem; }
 .mc.builtin { opacity:.38; }
@@ -58,44 +53,40 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
 .mc-prev { font-size:11px; color:rgba(245,160,174,.45); font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .mc-right { display:flex; align-items:center; gap:5px; flex-shrink:0; }
 .tag { font-size:9px; font-family:monospace; letter-spacing:1px; padding:2px 7px; border-radius:10px; white-space:nowrap; }
-.tag-bi  { background:rgba(232,82,106,.1);   color:rgba(232,82,106,.4); }
-.tag-add { background:rgba(255,215,80,.14);  color:#f0c060; }
-.tag-img { background:rgba(93,202,165,.14);  color:#5dcaa5; }
+.tag-bi { background:rgba(232,82,106,.1); color:rgba(232,82,106,.4); }
+.tag-add { background:rgba(255,215,80,.14); color:#f0c060; }
+.tag-img { background:rgba(93,202,165,.14); color:#5dcaa5; }
 .del-btn { background:none; border:none; color:rgba(232,82,106,.3); font-size:16px; cursor:pointer; padding:0 2px; line-height:1; transition:color .2s; }
 .del-btn:hover { color:#e8526a; }
-
 #add-form { background:#1a0308; border:1px solid rgba(192,50,74,.38); border-radius:14px; padding:1.5rem; }
 #add-form h3 { font-size:11px; color:#fff0f2; font-weight:400; letter-spacing:2px; margin-bottom:1.3rem; text-transform:uppercase; font-family:monospace; }
 .field { margin-bottom:1.1rem; }
 .field label { display:block; font-size:10px; color:rgba(232,82,106,.65); letter-spacing:1.5px; text-transform:uppercase; font-family:monospace; margin-bottom:.4rem; }
 .field input[type="text"], .field textarea, .field select {
-  width:100%; padding:10px 12px; background:rgba(255,255,255,.04);
-  border:1px solid rgba(232,82,106,.28); border-radius:8px; color:#fde8eb;
-  font-size:14px; font-family:'Georgia',serif; outline:none; resize:vertical; transition:border-color .2s;
+width:100%; padding:10px 12px; background:rgba(255,255,255,.04);
+border:1px solid rgba(232,82,106,.28); border-radius:8px; color:#fde8eb;
+font-size:14px; font-family:'Georgia',serif; outline:none; resize:vertical; transition:border-color .2s;
 }
 .field select { font-family:monospace; font-size:12px; cursor:pointer; }
 .field select option { background:#1a0308; }
 .field input[type="text"]:focus, .field textarea:focus, .field select:focus { border-color:#e8526a; }
 .field textarea { min-height:85px; line-height:1.65; }
 .field-hint { font-size:10px; color:rgba(245,160,174,.3); font-family:monospace; margin-top:.35rem; line-height:1.5; }
-
 .photo-drop {
-  border:1px dashed rgba(232,82,106,.32); border-radius:10px; padding:1.1rem;
-  text-align:center; cursor:pointer; transition:border-color .2s, background .2s;
-  position:relative; min-height:65px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:.3rem;
+border:1px dashed rgba(232,82,106,.32); border-radius:10px; padding:1.1rem;
+text-align:center; cursor:pointer; transition:border-color .2s, background .2s;
+position:relative; min-height:65px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:.3rem;
 }
 .photo-drop:hover, .photo-drop.dragover { border-color:#e8526a; background:rgba(232,82,106,.05); }
 .photo-drop input[type="file"] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
 .pd-text { font-size:12px; color:rgba(245,160,174,.45); font-family:monospace; }
-.pd-sub  { font-size:10px; color:rgba(245,160,174,.25); font-family:monospace; }
+.pd-sub { font-size:10px; color:rgba(245,160,174,.25); font-family:monospace; }
 #photo-preview { max-width:100%; max-height:150px; border-radius:8px; margin-top:.7rem; display:none; object-fit:cover; }
 .rm-photo { font-size:10px; color:rgba(232,82,106,.45); background:none; border:none; cursor:pointer; font-family:monospace; display:none; margin-top:.3rem; }
 .rm-photo:hover { color:#e8526a; }
-
 .size-opts { display:flex; gap:8px; }
 .sz { flex:1; padding:7px; text-align:center; border:1px solid rgba(232,82,106,.28); border-radius:8px; cursor:pointer; font-family:monospace; font-size:11px; color:rgba(245,160,174,.5); transition:all .2s; }
 .sz.sel, .sz:hover { border-color:#e8526a; color:#e8526a; background:rgba(232,82,106,.07); }
-
 #save-btn { width:100%; padding:13px; margin-top:1.2rem; background:transparent; border:1px solid #e8526a; color:#e8526a; border-radius:30px; font-size:13px; letter-spacing:2px; font-family:monospace; cursor:pointer; transition:all .3s; }
 #save-btn:hover:not(:disabled) { background:#e8526a; color:#150003; }
 #save-btn:disabled { opacity:.4; cursor:not-allowed; }
@@ -116,7 +107,7 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
   </div>
 </div>
 
-<!-- TOKEN SETUP SCREEN (first time on new device) -->
+<!-- TOKEN SETUP SCREEN -->
 <div id="s-tok" class="centered" style="display:none;">
   <div class="auth-box">
     <h2>first time setup</h2>
@@ -124,7 +115,7 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
     <input type="text" id="tok-in" placeholder="ghp_..." style="letter-spacing:1px;font-size:12px;">
     <button class="main-btn" onclick="saveTok()">encrypt & save</button>
     <div class="err-msg" id="tok-err"></div>
-    <div class="ok-msg"  id="tok-ok"></div>
+    <div class="ok-msg" id="tok-ok"></div>
   </div>
 </div>
 
@@ -153,17 +144,14 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
 
     <div id="add-form">
       <h3>+ new memory</h3>
-
       <div class="field">
         <label>name</label>
         <input type="text" id="f-name" placeholder="e.g. The Rooftop Night">
       </div>
-
       <div class="field">
         <label>text</label>
         <textarea id="f-text" placeholder="what happened, how it felt, why it matters..."></textarea>
       </div>
-
       <div class="field">
         <label>photo <span style="opacity:.38">(optional)</span></label>
         <div class="photo-drop" id="photo-drop">
@@ -174,15 +162,13 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
         <img id="photo-preview" alt="">
         <button class="rm-photo" id="rm-ph-btn" onclick="removePhoto()">✕ remove photo</button>
       </div>
-
       <div class="field">
         <label>connect to <span style="opacity:.38">(optional)</span></label>
         <select id="f-connect">
           <option value="">— no connection —</option>
         </select>
-        <div class="field-hint">draws a constellation line between this star and the chosen memory. great for linking a photo star to its text star, or chaining related memories.</div>
+        <div class="field-hint">draws a constellation line between this star and the chosen memory.</div>
       </div>
-
       <div class="field">
         <label>star size</label>
         <div class="size-opts">
@@ -191,7 +177,6 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
           <div class="sz" onclick="selSz(2.2)" data-sz="2.2">large</div>
         </div>
       </div>
-
       <button id="save-btn" onclick="saveMemory()">✦ add to the sky</button>
       <div id="status"></div>
     </div>
@@ -199,10 +184,11 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
 </div>
 
 <script>
-const PASS       = 'Iyad@002005';
-const OWNER      = 'josephcove0';
-const REPO       = 'dolcetta-';
-const FILE       = 'memories.json';
+const PASS = 'Iyad@002005';
+const OWNER = 'josephcove0';
+const REPO  = 'dolcetta-';
+const FILE  = 'memories.json';
+const CONN_FILE = 'connections.json';
 const ENC_KEY    = 'dlc_enc';
 const ENC_IV_KEY = 'dlc_iv';
 
@@ -215,11 +201,10 @@ const BUILTINS = [
   "Your Scent","Your Love Letter","Before We Were Dating"
 ];
 
-let extras=[], photo64=null, selSzVal=1.8, sha=null, token=null, tmpPw=null;
-let builtinConns={}, builtinConnSha=null; // index→index connections for built-in memories
-const CONN_FILE = 'connections.json';
+let extras=[], photo64=null, selSzVal=1.8, token=null, tmpPw=null;
+let builtinConns={};
 
-// ── CRYPTO ────────────────────────────────────────────────────────────────────
+// ── CRYPTO ───────────────────────────────────────────────────────────────────
 async function deriveKey(pw){
   const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
@@ -230,7 +215,7 @@ async function deriveKey(pw){
 async function encryptStr(str, pw){
   const key=await deriveKey(pw), iv=crypto.getRandomValues(new Uint8Array(12));
   const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv}, key, new TextEncoder().encode(str));
-  localStorage.setItem(ENC_KEY,    btoa(String.fromCharCode(...new Uint8Array(ct))));
+  localStorage.setItem(ENC_KEY, btoa(String.fromCharCode(...new Uint8Array(ct))));
   localStorage.setItem(ENC_IV_KEY, btoa(String.fromCharCode(...iv)));
 }
 async function decryptStr(pw){
@@ -245,14 +230,14 @@ async function decryptStr(pw){
   } catch{ return null; }
 }
 
-// ── AUTH ──────────────────────────────────────────────────────────────────────
+// ── AUTH ─────────────────────────────────────────────────────────────────────
 async function tryPw(){
   const pw=document.getElementById('pw-in').value;
   if(pw!==PASS){ showMsg('pw-err','wrong password'); document.getElementById('pw-in').value=''; return; }
   if(localStorage.getItem(ENC_KEY)){
     const tok=await decryptStr(pw);
     if(tok){ token=tok; showAdmin(); }
-    else   { showMsg('pw-err','decryption failed — try clearing token'); }
+    else { showMsg('pw-err','decryption failed — try clearing token'); }
   } else {
     tmpPw=pw;
     document.getElementById('s-pw').style.display='none';
@@ -275,41 +260,50 @@ function showAdmin(){
   document.getElementById('s-admin').style.display='block';
   loadMemories();
 }
-function lock()   { token=null; location.reload(); }
+function lock() { token=null; location.reload(); }
 function clearTok(){ if(!confirm('Remove saved token from this device?')) return; localStorage.removeItem(ENC_KEY); localStorage.removeItem(ENC_IV_KEY); token=null; location.reload(); }
-
-document.getElementById('pw-in').addEventListener('keydown',  e=>{ if(e.key==='Enter') tryPw(); });
+document.getElementById('pw-in').addEventListener('keydown', e=>{ if(e.key==='Enter') tryPw(); });
 document.getElementById('tok-in').addEventListener('keydown', e=>{ if(e.key==='Enter') saveTok(); });
 function showMsg(id, msg){ const el=document.getElementById(id); el.textContent=msg; setTimeout(()=>el.textContent='',3000); }
 
-// ── GITHUB API ────────────────────────────────────────────────────────────────
+// ── GITHUB API ───────────────────────────────────────────────────────────────
 async function ghGet(path){
   const r=await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`,
     {headers:{Authorization:`token ${token}`,Accept:'application/vnd.github.v3+json'}});
   if(!r.ok) throw new Error(`GET ${r.status}`);
   return r.json();
 }
-async function ghPut(path, content, sha, msg){
-  const body={message:msg, content:btoa(unescape(encodeURIComponent(content)))};
-  if(sha) body.sha=sha;
+
+// Always fetches a fresh SHA immediately before writing — prevents stale-SHA conflicts
+async function ghPut(path, content, msg){
+  // Get the very latest SHA right now
+  let latestSha = null;
+  try {
+    const current = await ghGet(path);
+    latestSha = current.sha;
+  } catch(e) {
+    // File might not exist yet (first write) — that's fine, sha stays null
+  }
+
+  const body = { message: msg, content: btoa(unescape(encodeURIComponent(content))) };
+  if(latestSha) body.sha = latestSha;
+
   const r=await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`,
     {method:'PUT', headers:{Authorization:`token ${token}`,Accept:'application/vnd.github.v3+json','Content-Type':'application/json'}, body:JSON.stringify(body)});
   if(!r.ok){ const e=await r.json(); throw new Error(e.message||`PUT ${r.status}`); }
   return r.json();
 }
 
-// ── LOAD ──────────────────────────────────────────────────────────────────────
+// ── LOAD ─────────────────────────────────────────────────────────────────────
 async function loadMemories(){
   try {
     const d=await ghGet(FILE);
-    sha=d.sha;
     extras=JSON.parse(decodeURIComponent(escape(atob(d.content.replace(/\n/g,'')))));
-  } catch{ extras=[]; sha=null; }
+  } catch{ extras=[]; }
   try {
     const d=await ghGet(CONN_FILE);
-    builtinConnSha=d.sha;
     builtinConns=JSON.parse(decodeURIComponent(escape(atob(d.content.replace(/\n/g,'')))));
-  } catch{ builtinConns={}; builtinConnSha=null; }
+  } catch{ builtinConns={}; }
   renderList(); buildConnectDropdown(); renderBuiltinConnRows();
 }
 
@@ -345,7 +339,7 @@ function renderBuiltinConnRows(){
     const current = builtinConns[i] !== undefined ? parseInt(builtinConns[i]) : '';
     let opts = '<option value="">— no connection —</option>';
     names.forEach((n, j) => {
-      if (j === i) return; // can't connect to itself
+      if (j === i) return;
       opts += `<option value="${j}" ${current===j?'selected':''}>${n}</option>`;
     });
     h += `<div class="conn-row">
@@ -368,8 +362,7 @@ async function saveBuiltinConnections(){
       if (v !== '') newConns[i] = parseInt(v);
     });
     const json = JSON.stringify(newConns, null, 2);
-    if (!builtinConnSha) { try{ const d=await ghGet(CONN_FILE); builtinConnSha=d.sha; }catch{} }
-    await ghPut(CONN_FILE, json, builtinConnSha, 'update builtin connections');
+    await ghPut(CONN_FILE, json, 'update builtin connections');
     builtinConns = newConns;
     await loadMemories();
     cst('✦ saved');
@@ -388,7 +381,7 @@ function buildConnectDropdown(){
   });
 }
 
-// ── PHOTO ─────────────────────────────────────────────────────────────────────
+// ── PHOTO ────────────────────────────────────────────────────────────────────
 function handlePhoto(input){
   const file=input.files[0]; if(!file) return;
   const reader=new FileReader();
@@ -420,7 +413,7 @@ function selSz(v){
   document.querySelectorAll('.sz').forEach(el=>el.classList.toggle('sel',parseFloat(el.dataset.sz)===v));
 }
 
-// ── SAVE ──────────────────────────────────────────────────────────────────────
+// ── SAVE ─────────────────────────────────────────────────────────────────────
 async function saveMemory(){
   const name=document.getElementById('f-name').value.trim();
   const text=document.getElementById('f-text').value.trim();
@@ -430,13 +423,23 @@ async function saveMemory(){
   document.getElementById('save-btn').disabled=true;
   st('saving to the sky...','work');
   try {
+    // Re-fetch the latest memories first to avoid overwriting concurrent changes
+    let latest = [];
+    try {
+      const d = await ghGet(FILE);
+      latest = JSON.parse(decodeURIComponent(escape(atob(d.content.replace(/\n/g,'')))));
+    } catch { latest = [...extras]; }
+
     const m={name,text,sz:selSzVal};
-    if(photo64)  m.photo=photo64;
-    if(cv!=='')  m.connectTo=parseInt(cv);
-    const updated=[...extras,m];
+    if(photo64) m.photo=photo64;
+    if(cv!=='') m.connectTo=parseInt(cv);
+
+    const updated=[...latest, m];
     const json=JSON.stringify(updated,null,2);
-    if(!sha){ try{const d=await ghGet(FILE);sha=d.sha;}catch{} }
-    await ghPut(FILE,json,sha,`add memory: ${name}`);
+
+    // ghPut now always fetches fresh SHA internally — no stale SHA possible
+    await ghPut(FILE, json, `add memory: ${name}`);
+
     await loadMemories();
     document.getElementById('f-name').value='';
     document.getElementById('f-text').value='';
@@ -448,15 +451,21 @@ async function saveMemory(){
   document.getElementById('save-btn').disabled=false;
 }
 
-// ── DELETE ────────────────────────────────────────────────────────────────────
+// ── DELETE ───────────────────────────────────────────────────────────────────
 async function delMem(i){
   if(!confirm(`Remove "${extras[i].name}"?`)) return;
   st('removing...','work');
   try {
-    const updated=extras.filter((_,j)=>j!==i);
+    // Re-fetch latest before deleting too
+    let latest = [...extras];
+    try {
+      const d = await ghGet(FILE);
+      latest = JSON.parse(decodeURIComponent(escape(atob(d.content.replace(/\n/g,'')))));
+    } catch {}
+
+    const updated=latest.filter((_,j)=>j!==i);
     const json=JSON.stringify(updated,null,2);
-    if(!sha){ try{const d=await ghGet(FILE);sha=d.sha;}catch{} }
-    await ghPut(FILE,json,sha,`remove: ${extras[i].name}`);
+    await ghPut(FILE, json, `remove: ${extras[i].name}`);
     await loadMemories();
     st('removed','ok'); setTimeout(()=>st('',''),2000);
   } catch(e){ st('error: '+e.message,'err'); }
@@ -466,7 +475,7 @@ function st(msg,type){ const el=document.getElementById('status'); el.textConten
 
 // Drag-drop photo
 const drop=document.getElementById('photo-drop');
-drop.addEventListener('dragover',  e=>{e.preventDefault();drop.classList.add('dragover');});
+drop.addEventListener('dragover', e=>{e.preventDefault();drop.classList.add('dragover');});
 drop.addEventListener('dragleave', ()=>drop.classList.remove('dragover'));
 drop.addEventListener('drop',e=>{
   e.preventDefault(); drop.classList.remove('dragover');
