@@ -2346,7 +2346,14 @@ function applyConnectionsAndCluster() {
   const isDebug = location.search.includes('debug') || location.hash.includes('debug');
   if (!isDebug) return;
 
+  // Panel HTML lives after </script> so we must wait for DOM
+  document.addEventListener('DOMContentLoaded', run);
+  // If DOMContentLoaded already fired (e.g. deferred execution), run immediately
+  if (document.readyState !== 'loading') run();
+
+  function run() {
   const panel = document.getElementById('debug-panel');
+  if (!panel) { console.error('[debug] #debug-panel not found in DOM'); return; }
   panel.style.display = 'flex';
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -2552,6 +2559,7 @@ function applyConnectionsAndCluster() {
   log(`URL: ${location.href}`, 'info');
   refreshStats();
   setTimeout(() => document.getElementById('dbg-check-gh').click(), 600);
+  } // end run()
 })();
 </script>
 <audio id="bg-music" loop preload="auto" src="./music.mp3"></audio>
