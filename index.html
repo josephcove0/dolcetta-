@@ -359,6 +359,17 @@ html, body { width:100%; height:100%; overflow:hidden; background:#00010f; font-
 .dbg-btn:active { transform:scale(.96); }
 .dbg-btn.warn { border-color:rgba(240,192,96,.4); color:#f0c060; background:rgba(240,192,96,.08); }
 .dbg-btn.warn:hover { background:rgba(240,192,96,.18); border-color:#f0c060; }
+.dbg-btn.active-mode {
+  opacity:0.55;
+  background:rgba(232,82,106,.25);
+  border-color:#e8526a;
+  box-shadow:0 0 10px rgba(232,82,106,.35);
+  animation:dbgPulse 1.1s ease-in-out infinite;
+}
+@keyframes dbgPulse {
+  0%,100% { box-shadow:0 0 6px rgba(232,82,106,.25); }
+  50%      { box-shadow:0 0 14px rgba(232,82,106,.55); }
+}
 #dbg-log-wrap {
   flex:1; min-height:90px; max-height:180px; overflow-y:auto;
   padding:6px 12px 8px; display:flex; flex-direction:column; gap:2px;
@@ -1049,6 +1060,24 @@ function pushLiveNotice(memories) {
 
   wrap.prepend(card);
   if (window._dbg) window._dbg('notice', { names: items.map(m => m.name) });
+}
+
+// Pan to a new star, then after the camera lands trigger the supernova + fade-in
+function revealNewStarWithPan(idx) {
+  if (typeof scene === 'undefined' || !scene) { queueNewStarReveal(idx); return; }
+
+  // Hide star until the pan finishes
+  const sp = sprites[idx], rg = rings[idx];
+  if (sp) { sp.material.opacity = 0; sp.userData.reveal = 0; }
+  if (rg) { rg.material.opacity = 0; rg.userData.reveal = 0; }
+
+  // Pan there — 1800ms duration
+  panToStar(idx);
+
+  // Trigger the burst right as the camera arrives
+  setTimeout(() => {
+    queueNewStarReveal(idx);
+  }, 1900); // slightly after the 1800ms pan
 }
 
 // Pan camera smoothly to a specific star by index
@@ -1939,6 +1968,10 @@ const hoverMouse = new THREE.Vector2();
 
 function onHoverMove(e){
   if(isMouseDown || modalOpen){ hideTooltip(); return; }
+  if(_supernovaPaintMode){
+    renderer.domElement.style.cursor = 'crosshair';
+    return;
+  }
   const rect = renderer.domElement.getBoundingClientRect();
   hoverMouse.x = ((e.clientX-rect.left)/rect.width)*2-1;
   hoverMouse.y = -((e.clientY-rect.top)/rect.height)*2+1;
@@ -1977,11 +2010,37 @@ function onMouseMove(e){
   prevM={x:e.clientX,y:e.clientY};
 }
 
+// ─── SUPERNOVA PAINT MODE (debug) ────────────────────────────────────────────
+let _supernovaPaintMode = false;
+
 function doClick(e){
   if(modalOpen)return;
   const rect=renderer.domElement.getBoundingClientRect();
   mouse.x=((e.clientX-rect.left)/rect.width)*2-1;
   mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
+
+  // Paint mode: fire supernova at nearest star to click point
+  if(_supernovaPaintMode && typeof scene !== 'undefined' && scene){
+    raycaster.setFromCamera(mouse,camera);
+    // Try to hit a hitbox first; if not, find geometrically closest star
+    const hits=raycaster.intersectObjects([...hitboxes,...Object.values(sprites)]);
+    let targetIdx = null;
+    if(hits.length && hits[0].object.userData.idx !== undefined){
+      targetIdx = hits[0].object.userData.idx;
+    } else {
+      // Closest star to the ray direction
+      const rd = raycaster.ray.direction.clone().normalize();
+      let best = -Infinity;
+      Object.keys(sprites).forEach(i => {
+        const sp = sprites[i];
+        const d  = sp.position.clone().normalize().dot(rd);
+        if(d > best){ best = d; targetIdx = parseInt(i); }
+      });
+    }
+    if(targetIdx !== null) queueNewStarReveal(targetIdx);
+    return;
+  }
+
   raycaster.setFromCamera(mouse,camera);
   const hits=raycaster.intersectObjects([...hitboxes,...Object.values(sprites)]);
   if(hits.length&&hits[0].object.userData.idx!==undefined)
@@ -2192,7 +2251,7 @@ function applyConnectionsAndCluster() {
       [...hitboxes, ...Object.values(sprites), ...Object.values(rings)].forEach(o => scene.remove(o));
       buildMemoryStars();
       buildStarLabels();
-      newIdxs.forEach(queueNewStarReveal);
+      newIdxs.forEach(revealNewStarWithPan);
       pushLiveNotice(newIdxs.map((idx, i) => ({ idx, name: toAdd[i].name || 'untitled memory' })));
     }
   }
@@ -2496,11 +2555,20 @@ function applyConnectionsAndCluster() {
     pushLiveNotice([{ idx, name: name + ' [TEST]' }]);
   };
 
-  document.getElementById('dbg-test-supernova').onclick = () => {
-    if (typeof scene === 'undefined' || !scene) { log('scene not ready yet', 'warn'); return; }
-    const idx = Math.floor(Math.random() * (typeof MEMORIES !== 'undefined' ? MEMORIES.length : 1));
-    log(`test supernova fired → idx ${idx}`, 'info');
-    queueNewStarReveal(idx);
+  const snovaBtn = document.getElementById('dbg-test-supernova');
+  snovaBtn.onclick = () => {
+    if (typeof scene === 'undefined' || !scene) { log('scene not ready yet — open the sky first', 'warn'); return; }
+    _supernovaPaintMode = !_supernovaPaintMode;
+    if (_supernovaPaintMode) {
+      snovaBtn.classList.add('active-mode');
+      snovaBtn.textContent = '★ Click sky to blast';
+      log('supernova paint mode ON — click anywhere on the sky', 'ok');
+    } else {
+      snovaBtn.classList.remove('active-mode');
+      snovaBtn.textContent = '★ Test Supernova';
+      renderer.domElement.style.cursor = '';
+      log('supernova paint mode OFF', 'info');
+    }
   };
 
   document.getElementById('dbg-check-gh').onclick = async () => {
