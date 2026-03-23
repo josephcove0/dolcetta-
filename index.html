@@ -400,22 +400,6 @@ html, body { width:100%; height:100%; overflow:hidden; background:#00010f; font-
   height:100%; background:#e8526a; border-radius:2px;
   transition:width .25s linear; width:0%;
 }
-/* ── SUPERNOVA FLASH OVERLAY ─────────────────────────────────────────────── */
-#supernova-flash {
-  position:fixed; inset:0; z-index:25;
-  pointer-events:none;
-  background:radial-gradient(ellipse at center,
-    rgba(255,248,235,1)   0%,
-    rgba(255,225,180,0.9) 18%,
-    rgba(232,130,145,0.6) 42%,
-    rgba(100,40,80,0.25)  68%,
-    rgba(0,0,0,0)         100%
-  );
-  opacity:0;
-  mix-blend-mode:screen;
-  will-change:opacity;
-}
-
 /* Loading screen */
 #loader {
   position:fixed; inset:0; z-index:100;
@@ -603,7 +587,6 @@ html, body { width:100%; height:100%; overflow:hidden; background:#00010f; font-
 
 <div id="sky">
   <canvas id="sky-canvas"></canvas>
-  <div id="supernova-flash"></div>
   <div id="hud">
     <span id="nav-hint">drag to explore · click a glowing star</span>
     <span id="star-counter">0 / 0</span>
@@ -972,10 +955,12 @@ let modalOpen=false;
 let lastTouchTime = 0;
 let modalOpenedAt = 0;
 let newStarAnimations = [];
-let supernovaBursts = [];
-let supernovaFlashes = [];   // full-screen brightness flashes
+let supernovaBursts = [];   // phase 2: spiky burst rays
+let supernovaBloom  = [];   // phase 1: expanding soft light blob
 let burstTexture = null;
+let bloomTexture = null;
 
+// Spiky burst texture (existing)
 function makeSupernovaCanvas(){
   const dim = 256;
   const c = document.createElement('canvas');
@@ -1013,9 +998,35 @@ function makeSupernovaCanvas(){
   return c;
 }
 
+// Bloom texture — pure soft radial glow, no spikes, mimics physical light bloom
+function makeBloomCanvas(){
+  const dim = 512;
+  const c = document.createElement('canvas');
+  c.width = dim; c.height = dim;
+  const cx = c.getContext('2d');
+  cx.translate(dim/2, dim/2);
+
+  // Outer warm halo
+  const g2 = cx.createRadialGradient(0,0,0,0,0,dim*0.5);
+  g2.addColorStop(0,    'rgba(255,255,255,1)');
+  g2.addColorStop(0.04, 'rgba(255,252,240,0.98)');
+  g2.addColorStop(0.12, 'rgba(255,235,180,0.88)');
+  g2.addColorStop(0.28, 'rgba(255,180,140,0.55)');
+  g2.addColorStop(0.50, 'rgba(232,100,120,0.22)');
+  g2.addColorStop(0.75, 'rgba(140,40,80,0.07)');
+  g2.addColorStop(1,    'rgba(0,0,0,0)');
+  cx.fillStyle = g2;
+  cx.beginPath(); cx.arc(0,0,dim*0.5,0,Math.PI*2); cx.fill();
+  return c;
+}
+
 function getSupernovaTexture(){
   if(!burstTexture) burstTexture = new THREE.CanvasTexture(makeSupernovaCanvas());
   return burstTexture;
+}
+function getBloomTexture(){
+  if(!bloomTexture) bloomTexture = new THREE.CanvasTexture(makeBloomCanvas());
+  return bloomTexture;
 }
 
 function pushLiveNotice(memories) {
@@ -1130,25 +1141,48 @@ function queueNewStarReveal(idx){
   if (window._dbg) window._dbg('supernova', { idx, name: MEMORIES[idx] ? MEMORIES[idx].name : '?' });
   const sp = sprites[idx], rg = rings[idx];
   if(!sp || !rg) return;
-  sp.userData.reveal = 0;
-  rg.userData.reveal = 0;
-  sp.material.opacity = 0;
-  rg.material.opacity = 0;
-  newStarAnimations.push({ idx, start: performance.now(), duration: 1150 });
 
-  const burst = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: getSupernovaTexture(),
+  // Star is invisible until phase 3
+  sp.userData.reveal = 0; rg.userData.reveal = 0;
+  sp.material.opacity = 0; rg.material.opacity = 0;
+
+  const pos = sp.position.clone();
+  const now = performance.now();
+
+  // ── Phase 1: Bloom (soft expanding light, 0–700ms) ───────────────────────
+  const bloom = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: getBloomTexture(),
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     opacity: 0
   }));
-  burst.position.copy(sp.position);
-  burst.scale.set(0.2, 0.2, 1);
-  burst.renderOrder = 8;
-  scene.add(burst);
-  supernovaBursts.push({ sprite: burst, idx, start: performance.now(), duration: 1350 });
-  supernovaFlashes.push({ start: performance.now(), duration: 2400 });
+  bloom.position.copy(pos);
+  bloom.scale.set(0.1, 0.1, 1);
+  bloom.renderOrder = 7;
+  scene.add(bloom);
+  supernovaBloom.push({ sprite: bloom, idx, start: now, duration: 1800 });
+
+  // ── Phase 2: Spiky burst (starts at 400ms, 400–1800ms) ───────────────────
+  setTimeout(() => {
+    const burst = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: getSupernovaTexture(),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      opacity: 0
+    }));
+    burst.position.copy(pos);
+    burst.scale.set(0.15, 0.15, 1);
+    burst.renderOrder = 8;
+    scene.add(burst);
+    supernovaBursts.push({ sprite: burst, idx, start: performance.now(), duration: 1400 });
+  }, 400);
+
+  // ── Phase 3: Star fades in (starts at 1100ms) ────────────────────────────
+  setTimeout(() => {
+    newStarAnimations.push({ idx, start: performance.now(), duration: 1200 });
+  }, 1100);
 }
 
 function updateNewStarAnimations(now){
@@ -1175,44 +1209,49 @@ function updateNewStarAnimations(now){
     const b = supernovaBursts[i];
     const p = Math.min(1, (now - b.start) / b.duration);
     const easeOut = 1 - Math.pow(1 - p, 3);
-    const fade = Math.pow(1 - p, 2);
+    // Fast expansion then slow drift, fades out quadratically
+    const scale = 0.15 + easeOut * 2.8;
+    const fade  = Math.pow(1 - p, 2);
     const sp = sprites[b.idx];
     if(sp) b.sprite.position.copy(sp.position);
-    const scale = 0.35 + easeOut * 2.3;
     b.sprite.scale.set(scale, scale, 1);
-    b.sprite.material.opacity = fade * 0.95;
+    b.sprite.material.opacity = fade * 0.92;
     if(p >= 1){
-      scene.remove(b.sprite);
-      b.sprite.material.dispose();
+      scene.remove(b.sprite); b.sprite.material.dispose();
       supernovaBursts.splice(i,1);
     }
   }
-}
 
-function updateSupernovaFlash(now) {
-  const flashEl = document.getElementById('supernova-flash');
-  if (!flashEl) return;
+  // Phase 1 bloom update
+  for(let i = supernovaBloom.length - 1; i >= 0; i--){
+    const b = supernovaBloom[i];
+    const p = Math.min(1, (now - b.start) / b.duration);
+    const sp = sprites[b.idx];
+    if(sp) b.sprite.position.copy(sp.position);
 
-  let totalBrightness = 0;
-
-  for (let i = supernovaFlashes.length - 1; i >= 0; i--) {
-    const f = supernovaFlashes[i];
-    const p = (now - f.start) / f.duration;
-    if (p >= 1) { supernovaFlashes.splice(i, 1); continue; }
-
-    // Curve: ultra-fast ramp to peak (0-6% = ~144ms), then long warm decay
-    // Mimics real supernova light curve: sharp rise, exponential-ish tail
-    let brightness;
-    if (p < 0.06) {
-      brightness = p / 0.06;                              // attack
+    // Light curve: sharp attack (0–5%), shoulder hold (5–20%), long decay
+    let opacity;
+    if(p < 0.05){
+      opacity = p / 0.05;                                  // instant flash up
+    } else if(p < 0.20){
+      opacity = 1.0;                                       // hold at peak
     } else {
-      const dp = (p - 0.06) / 0.94;
-      brightness = Math.pow(1 - dp, 1.8) * (1 + dp * 0.4); // shoulder + decay
+      const dp = (p - 0.20) / 0.80;
+      opacity = Math.pow(1 - dp, 1.6);                    // warm exponential decay
     }
-    totalBrightness += brightness;
-  }
 
-  flashEl.style.opacity = Math.min(1, totalBrightness).toFixed(4);
+    // Scale: starts tiny, expands rapidly then slows (light spreading outward)
+    const expandEase = 1 - Math.pow(1 - Math.min(p / 0.35, 1), 2);
+    const scale = 0.05 + expandEase * 5.5;
+
+    b.sprite.scale.set(scale, scale, 1);
+    b.sprite.material.opacity = opacity * 0.88;
+
+    if(p >= 1){
+      scene.remove(b.sprite); b.sprite.material.dispose();
+      supernovaBloom.splice(i,1);
+    }
+  }
 }
 
 function updateMemoryCounterUI(){
@@ -1900,7 +1939,6 @@ function animate(now=0){
   updateTwinkle(t);
   updateShooters(dt,now);
   updateNewStarAnimations(now);
-  updateSupernovaFlash(now);
 
   // Memory star pulse
   Object.keys(sprites).forEach(idx=>{
