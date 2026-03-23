@@ -69,6 +69,47 @@ html, body { width:100%; height:100%; overflow:hidden; background:#00010f; font-
 }
 #toast.show { opacity:1; }
 
+/* Live new-memory notices */
+#live-notices {
+  position:absolute; top:16px; left:16px; z-index:68;
+  display:flex; flex-direction:column; gap:10px;
+  max-width:min(420px, calc(100vw - 32px));
+  pointer-events:none;
+}
+.live-notice {
+  pointer-events:all;
+  background:rgba(22,3,10,.92); border:1px solid rgba(232,82,106,.45);
+  color:#fde8eb; border-radius:14px; padding:12px 14px 12px 14px;
+  box-shadow:0 8px 28px rgba(0,0,0,.32), 0 0 22px rgba(232,82,106,.12);
+  backdrop-filter:blur(10px);
+  animation:noticeIn .34s ease;
+}
+.live-notice-head {
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  margin-bottom:8px;
+}
+.live-notice-title {
+  font-size:11px; letter-spacing:1.8px; text-transform:uppercase;
+  color:#e8526a; font-family:monospace;
+}
+.live-notice-close {
+  background:none; border:none; color:#f5a0ae; cursor:pointer;
+  font-size:18px; line-height:1; padding:0;
+}
+.live-notice-body {
+  font-size:13px; line-height:1.6; color:#f9d4da;
+}
+.live-notice-list {
+  margin-top:8px; padding-left:16px;
+}
+.live-notice-list li {
+  margin:4px 0;
+}
+@keyframes noticeIn {
+  from { opacity:0; transform:translateY(-8px) scale(.98); }
+  to   { opacity:1; transform:translateY(0) scale(1); }
+}
+
 /* Modal */
 #modal-wrap {
   position:absolute; inset:0; z-index:50;
@@ -201,6 +242,11 @@ html, body { width:100%; height:100%; overflow:hidden; background:#00010f; font-
     font-size:13px; padding:.9rem 1.2rem;
     max-width:88vw; width:88vw;
   }
+
+  #live-notices { top:10px; left:10px; max-width:calc(100vw - 20px); }
+  .live-notice { padding:10px 11px; border-radius:12px; }
+  .live-notice-title { font-size:10px; letter-spacing:1.3px; }
+  .live-notice-body { font-size:12px; }
 
   /* Modal */
   #modal-wrap { align-items:flex-end; padding-bottom:env(safe-area-inset-bottom, 0); }
@@ -432,6 +478,7 @@ html, body { width:100%; height:100%; overflow:hidden; background:#00010f; font-
       <button id="hint-btn" onclick="giveHint()">✦ find a star</button>
     </div>
   </div>
+  <div id="live-notices"></div>
   <div id="toast"></div>
   <div id="music-controls">
     <button id="mute-btn" onclick="toggleMute()" title="mute/unmute">♪</button>
@@ -790,6 +837,136 @@ let isMouseDown=false,isDragging=false,prevM={x:0,y:0},rotV={x:0,y:0};
 let modalOpen=false;
 let lastTouchTime = 0;
 let modalOpenedAt = 0;
+let newStarAnimations = [];
+let supernovaBursts = [];
+let burstTexture = null;
+
+function makeSupernovaCanvas(){
+  const dim = 256;
+  const c = document.createElement('canvas');
+  c.width = dim; c.height = dim;
+  const cx = c.getContext('2d');
+  cx.translate(dim/2, dim/2);
+
+  const g = cx.createRadialGradient(0,0,0,0,0,dim*0.45);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.08, 'rgba(255,236,240,.95)');
+  g.addColorStop(0.22, 'rgba(232,130,145,.78)');
+  g.addColorStop(0.5, 'rgba(232,82,106,.18)');
+  g.addColorStop(1, 'rgba(232,82,106,0)');
+  cx.fillStyle = g;
+  cx.beginPath(); cx.arc(0,0,dim*0.45,0,Math.PI*2); cx.fill();
+
+  cx.strokeStyle = 'rgba(255,225,235,.78)';
+  cx.lineWidth = 3;
+  cx.shadowColor = 'rgba(232,82,106,.7)';
+  cx.shadowBlur = 18;
+  for(let i=0;i<8;i++){
+    const a = (Math.PI*2/8) * i;
+    const inner = dim*0.08;
+    const outer = dim*(i % 2 === 0 ? 0.42 : 0.28);
+    cx.beginPath();
+    cx.moveTo(Math.cos(a)*inner, Math.sin(a)*inner);
+    cx.lineTo(Math.cos(a)*outer, Math.sin(a)*outer);
+    cx.stroke();
+  }
+
+  cx.shadowBlur = 0;
+  cx.strokeStyle = 'rgba(255,205,220,.4)';
+  cx.lineWidth = 4;
+  cx.beginPath(); cx.arc(0,0,dim*0.25,0,Math.PI*2); cx.stroke();
+  return c;
+}
+
+function getSupernovaTexture(){
+  if(!burstTexture) burstTexture = new THREE.CanvasTexture(makeSupernovaCanvas());
+  return burstTexture;
+}
+
+function pushLiveNotice(memoryNames){
+  const list = Array.isArray(memoryNames) ? memoryNames : [memoryNames];
+  if(!list.length) return;
+  const wrap = document.getElementById('live-notices');
+  if(!wrap) return;
+
+  const card = document.createElement('div');
+  card.className = 'live-notice';
+
+  const bodyHtml = list.length === 1
+    ? `<div class="live-notice-body"><strong>${list[0]}</strong> just appeared in the sky.</div>`
+    : `<div class="live-notice-body">${list.length} new memories just appeared.</div><ul class="live-notice-list">${list.map(name => `<li>${name}</li>`).join('')}</ul>`;
+
+  card.innerHTML = `
+    <div class="live-notice-head">
+      <span class="live-notice-title">new memory unlocked ✦</span>
+      <button class="live-notice-close" aria-label="dismiss notice">✕</button>
+    </div>
+    ${bodyHtml}`;
+
+  card.querySelector('.live-notice-close').addEventListener('click', () => card.remove());
+  wrap.prepend(card);
+}
+
+function queueNewStarReveal(idx){
+  const sp = sprites[idx], rg = rings[idx];
+  if(!sp || !rg) return;
+  sp.userData.reveal = 0;
+  rg.userData.reveal = 0;
+  sp.material.opacity = 0;
+  rg.material.opacity = 0;
+  newStarAnimations.push({ idx, start: performance.now(), duration: 1150 });
+
+  const burst = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: getSupernovaTexture(),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0
+  }));
+  burst.position.copy(sp.position);
+  burst.scale.set(0.2, 0.2, 1);
+  burst.renderOrder = 8;
+  scene.add(burst);
+  supernovaBursts.push({ sprite: burst, idx, start: performance.now(), duration: 1350 });
+}
+
+function updateNewStarAnimations(now){
+  for(let i = newStarAnimations.length - 1; i >= 0; i--){
+    const a = newStarAnimations[i];
+    const sp = sprites[a.idx], rg = rings[a.idx];
+    if(!sp || !rg){ newStarAnimations.splice(i,1); continue; }
+    const p = Math.min(1, (now - a.start) / a.duration);
+    const eased = 1 - Math.pow(1 - p, 3);
+    sp.userData.reveal = eased;
+    rg.userData.reveal = eased;
+    sp.material.opacity = Math.min(1, eased * 1.06);
+    rg.material.opacity = eased * 0.92;
+    if(p >= 1){
+      sp.userData.reveal = 1;
+      rg.userData.reveal = 1;
+      sp.material.opacity = 1;
+      rg.material.opacity = 0.92;
+      newStarAnimations.splice(i,1);
+    }
+  }
+
+  for(let i = supernovaBursts.length - 1; i >= 0; i--){
+    const b = supernovaBursts[i];
+    const p = Math.min(1, (now - b.start) / b.duration);
+    const easeOut = 1 - Math.pow(1 - p, 3);
+    const fade = Math.pow(1 - p, 2);
+    const sp = sprites[b.idx];
+    if(sp) b.sprite.position.copy(sp.position);
+    const scale = 0.35 + easeOut * 2.3;
+    b.sprite.scale.set(scale, scale, 1);
+    b.sprite.material.opacity = fade * 0.95;
+    if(p >= 1){
+      scene.remove(b.sprite);
+      b.sprite.material.dispose();
+      supernovaBursts.splice(i,1);
+    }
+  }
+}
 
 function updateMemoryCounterUI(){
   const total = MEMORIES.length;
@@ -941,7 +1118,7 @@ let nextShooterAt=0;
 let hintPan=null;
 
 // ─── ENTER ───────────────────────────────────────────────────────────────────
-function enterSky(){
+async function enterSky(){
   document.getElementById('loading-screen').classList.add('active');
   document.getElementById('intro').classList.add('fade');
   startMusic();
@@ -956,7 +1133,11 @@ function enterSky(){
     cvs.style.width  = window.innerWidth  + 'px';
     cvs.style.height = window.innerHeight + 'px';
     void skyEl.offsetWidth;
-    requestAnimationFrame(()=>{ requestAnimationFrame(()=>{ document.getElementById('loading-screen').classList.remove('active'); initThree(); }); });
+    requestAnimationFrame(()=>{ requestAnimationFrame(async ()=>{
+      await refreshRemoteMemories(false);
+      document.getElementById('loading-screen').classList.remove('active');
+      initThree();
+    }); });
   },1400);
 }
 
@@ -1470,17 +1651,26 @@ function animate(now=0){
 
   updateTwinkle(t);
   updateShooters(dt,now);
+  updateNewStarAnimations(now);
 
   // Memory star pulse
   Object.keys(sprites).forEach(idx=>{
     const sp=sprites[idx],m=MEMORIES[idx];
     const pulse=1+.18*Math.sin(t*1.1+idx*1.7);
-    const base=m.sz*.24; sp.scale.set(base*pulse,base*pulse,1);
+    const reveal = sp.userData.reveal ?? 1;
+    const appearScale = 0.35 + reveal * 0.65;
+    const base=m.sz*.24;
+    sp.scale.set(base*pulse*appearScale,base*pulse*appearScale,1);
+    sp.material.opacity = Math.max(sp.material.opacity ?? 1, reveal);
   });
   Object.keys(rings).forEach(idx=>{
     const rg=rings[idx],m=MEMORIES[idx];
     const pulse=1+.10*Math.sin(t*.7+idx*2.1);
-    const rbase=m.sz*.52; rg.scale.set(rbase*pulse,rbase*pulse,1);
+    const reveal = rg.userData.reveal ?? 1;
+    const appearScale = 0.45 + reveal * 0.55;
+    const rbase=m.sz*.52;
+    rg.scale.set(rbase*pulse*appearScale,rbase*pulse*appearScale,1);
+    rg.material.opacity = Math.max(0.92 * reveal, rg.material.opacity ?? 0.92);
   });
 
   updateStarTrails();
@@ -1715,12 +1905,18 @@ nextShooterAt=performance.now()+5000;
 
 // Fetched data — stored here, applied after initThree() builds the scene
 let _pendingExtra = [], _pendingBuiltinConns = {};
+let _remoteFetchNonce = 0;
 
 // Fetch via GitHub Contents API (same endpoint the admin uses — no CORS issues)
 const _OWNER = 'josephcove0', _REPO = 'dolcetta-';
-function ghFetch(file) {
-  return fetch('https://api.github.com/repos/' + _OWNER + '/' + _REPO + '/contents/' + file, {
-    headers: { Accept: 'application/vnd.github.v3+json' }
+function ghFetch(file, bust = '') {
+  const qs = bust ? ('?t=' + encodeURIComponent(bust)) : '';
+  return fetch('https://api.github.com/repos/' + _OWNER + '/' + _REPO + '/contents/' + file + qs, {
+    headers: {
+      Accept: 'application/vnd.github.v3+json',
+      'Cache-Control': 'no-cache'
+    },
+    cache: 'no-store'
   })
   .then(r => r.ok ? r.json() : null)
   .then(d => {
@@ -1729,14 +1925,32 @@ function ghFetch(file) {
   })
   .catch(() => null);
 }
-Promise.all([
-  ghFetch('memories.json').then(d => Array.isArray(d) ? d : []),
-  ghFetch('connections.json').then(d => (d && typeof d === 'object' && !Array.isArray(d)) ? d : {})
-]).then(([extra, builtinConns]) => {
+
+async function refreshRemoteMemories(rebuildIfReady = true) {
+  const bust = `${Date.now()}-${++_remoteFetchNonce}`;
+  const prevExtraSig = JSON.stringify(_pendingExtra || []);
+  const prevConnSig = JSON.stringify(_pendingBuiltinConns || {});
+
+  const [extra, builtinConns] = await Promise.all([
+    ghFetch('memories.json', bust).then(d => Array.isArray(d) ? d : []),
+    ghFetch('connections.json', bust).then(d => (d && typeof d === 'object' && !Array.isArray(d)) ? d : {})
+  ]);
+
   _pendingExtra = extra || [];
   _pendingBuiltinConns = (builtinConns && typeof builtinConns === 'object') ? builtinConns : {};
-  // If scene already built (user entered sky before fetch finished), apply now
-  if (typeof scene !== 'undefined' && scene) applyConnectionsAndCluster();
+
+  const changed = JSON.stringify(_pendingExtra) !== prevExtraSig || JSON.stringify(_pendingBuiltinConns) !== prevConnSig;
+
+  if (changed && typeof scene !== 'undefined' && scene && rebuildIfReady) {
+    applyConnectionsAndCluster();
+    updateMemoryCounterUI();
+  }
+}
+
+refreshRemoteMemories(false);
+window.addEventListener('focus', () => { refreshRemoteMemories(true); });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) refreshRemoteMemories(true);
 });
 
 // Called from initThree() after buildMemoryStars() — applies connections, clusters, draws lines
@@ -1782,10 +1996,13 @@ function applyConnectionsAndCluster() {
 
     // Rebuild all sprites/hitboxes to include the new entries
     if (toAdd.length > 0 && typeof scene !== 'undefined' && scene) {
+      const newIdxs = toAdd.map((_, offset) => MEMORIES.length - toAdd.length + offset);
       // Remove old scene objects
       [...hitboxes, ...Object.values(sprites), ...Object.values(rings)].forEach(o => scene.remove(o));
       buildMemoryStars();
       buildStarLabels();
+      newIdxs.forEach(queueNewStarReveal);
+      pushLiveNotice(toAdd.map(m => m.name || 'untitled memory'));
     }
   }
 
