@@ -2346,7 +2346,7 @@ function applyConnectionsAndCluster() {
   const isDebug = location.search.includes('debug') || location.hash.includes('debug');
   if (!isDebug) return;
 
-  // Panel HTML lives after </script> so we must wait for DOM
+  // Panel HTML lives after the script tag so we must wait for DOM
   document.addEventListener('DOMContentLoaded', run);
   // If DOMContentLoaded already fired (e.g. deferred execution), run immediately
   if (document.readyState !== 'loading') run();
