@@ -105,6 +105,22 @@ html, body { width:100%; height:100%; overflow:hidden; background:#00010f; font-
 .live-notice-list li {
   margin:4px 0;
 }
+.live-notice-nav {
+  display:inline-block;
+  margin-top:7px;
+  font-size:10px; letter-spacing:1.4px;
+  color:rgba(232,82,106,.7); font-family:monospace;
+  border-bottom:1px dashed rgba(232,82,106,.35);
+  padding-bottom:1px;
+}
+.live-notice-clickable {
+  cursor:pointer;
+  transition:border-color .2s, box-shadow .2s;
+}
+.live-notice-clickable:hover {
+  border-color:rgba(232,82,106,.75);
+  box-shadow:0 8px 28px rgba(0,0,0,.32), 0 0 28px rgba(232,82,106,.22);
+}
 @keyframes noticeIn {
   from { opacity:0; transform:translateY(-8px) scale(.98); }
   to   { opacity:1; transform:translateY(0) scale(1); }
@@ -883,28 +899,93 @@ function getSupernovaTexture(){
   return burstTexture;
 }
 
-function pushLiveNotice(memoryNames){
-  const list = Array.isArray(memoryNames) ? memoryNames : [memoryNames];
-  if(!list.length) return;
+function pushLiveNotice(memories) {
+  // memories can be strings or {idx, name} objects
+  const list = Array.isArray(memories) ? memories : [memories];
+  if (!list.length) return;
+
+  // Normalise to [{idx, name}]
+  const items = list.map(item =>
+    typeof item === 'string' ? { idx: null, name: item } : item
+  );
+
   const wrap = document.getElementById('live-notices');
-  if(!wrap) return;
+  if (!wrap) return;
 
   const card = document.createElement('div');
   card.className = 'live-notice';
 
-  const bodyHtml = list.length === 1
-    ? `<div class="live-notice-body"><strong>${list[0]}</strong> just appeared in the sky.</div>`
-    : `<div class="live-notice-body">${list.length} new memories just appeared.</div><ul class="live-notice-list">${list.map(name => `<li>${name}</li>`).join('')}</ul>`;
+  const single = items.length === 1;
+  const bodyHtml = single
+    ? `<div class="live-notice-body"><strong>${items[0].name}</strong> just appeared in the sky.${
+        items[0].idx !== null
+          ? '<br><span class="live-notice-nav">tap to fly there \u2197</span>'
+          : ''
+      }</div>`
+    : `<div class="live-notice-body">${items.length} new memories just appeared in the sky.</div>
+       <ul class="live-notice-list">${items.map(m => `<li>${m.name}</li>`).join('')}</ul>
+       ${items.find(m => m.idx !== null) ? '<span class="live-notice-nav">tap to fly to the first one \u2197</span>' : ''}`;
 
   card.innerHTML = `
     <div class="live-notice-head">
-      <span class="live-notice-title">new memory unlocked ✦</span>
-      <button class="live-notice-close" aria-label="dismiss notice">✕</button>
+      <span class="live-notice-title">new memory unlocked \u2726</span>
+      <button class="live-notice-close" aria-label="dismiss">\u2715</button>
     </div>
     ${bodyHtml}`;
 
-  card.querySelector('.live-notice-close').addEventListener('click', () => card.remove());
+  // Dismiss button
+  card.querySelector('.live-notice-close').addEventListener('click', e => {
+    e.stopPropagation();
+    card.style.transition = 'opacity .25s ease';
+    card.style.opacity = '0';
+    setTimeout(() => card.remove(), 260);
+  });
+
+  // Click card body to fly to the star
+  const navTarget = single
+    ? items[0]
+    : items.find(m => m.idx !== null);
+
+  if (navTarget && navTarget.idx !== null) {
+    card.classList.add('live-notice-clickable');
+    card.addEventListener('click', e => {
+      if (e.target.closest('.live-notice-close')) return;
+      panToStar(navTarget.idx);
+      card.style.transition = 'opacity .25s ease';
+      card.style.opacity = '0';
+      setTimeout(() => card.remove(), 260);
+    });
+  }
+
   wrap.prepend(card);
+}
+
+// Pan camera smoothly to a specific star by index
+function panToStar(idx) {
+  const starSprite = sprites[idx];
+  if (!starSprite || !scene) return;
+  const dir = starSprite.position.clone().normalize();
+  const horizLen = Math.sqrt(dir.x * dir.x + dir.z * dir.z);
+  const targetY = Math.atan2(dir.x, dir.z);
+  const targetX = -Math.atan2(dir.y, horizLen);
+  const startX = scene.rotation.x;
+  const startY = scene.rotation.y;
+  let dy = targetY - startY;
+  while (dy >  Math.PI) dy -= Math.PI * 2;
+  while (dy < -Math.PI) dy += Math.PI * 2;
+  let dx = targetX - startX;
+  while (dx >  Math.PI) dx -= Math.PI * 2;
+  while (dx < -Math.PI) dx += Math.PI * 2;
+  hintPan = {
+    startX, startY,
+    finalX: startX + dx,
+    finalY: startY + dy,
+    startTime: performance.now(),
+    duration: 1800,
+    targetIdx: idx
+  };
+  hintTrailVel = { x: 0, y: 0 };
+  rotV = { x: 0, y: 0 };
 }
 
 function queueNewStarReveal(idx){
@@ -1179,6 +1260,7 @@ function initThree(){
   buildStarLabels();
   setupEvents();
   animate();
+  startLivePolling();
   window.addEventListener('resize',onResize);
 }
 
@@ -1899,6 +1981,19 @@ function onResize(){
   renderer.setSize(W,H);
 }
 
+// ─── LIVE POLLING ────────────────────────────────────────────────────────────
+// Polls GitHub every 10 seconds once the sky is open.
+// GitHub unauthenticated API allows ~60 req/hour per IP; 2 files × 6/min = 12/min
+// which is well within limits for personal single-viewer use.
+let _livePollingInterval = null;
+
+function startLivePolling() {
+  if (_livePollingInterval) return;
+  _livePollingInterval = setInterval(() => {
+    if (!document.hidden) refreshRemoteMemories(true);
+  }, 10000); // every 10 seconds
+}
+
 // ─── BOOT ────────────────────────────────────────────────────────────────────
 paintIntroSky();
 nextShooterAt=performance.now()+5000;
@@ -2002,7 +2097,7 @@ function applyConnectionsAndCluster() {
       buildMemoryStars();
       buildStarLabels();
       newIdxs.forEach(queueNewStarReveal);
-      pushLiveNotice(toAdd.map(m => m.name || 'untitled memory'));
+      pushLiveNotice(newIdxs.map((idx, i) => ({ idx, name: toAdd[i].name || 'untitled memory' })));
     }
   }
 
