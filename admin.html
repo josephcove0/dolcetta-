@@ -131,7 +131,10 @@ position:relative; min-height:65px; display:flex; align-items:center; justify-co
       </div>
     </div>
 
-    <div class="sec-title">all memories</div>
+    <div class="sec-title" style="display:flex;align-items:center;justify-content:space-between;">
+      <span>all memories</span>
+      <button onclick="loadMemories()" id="refresh-btn" style="background:none;border:1px solid rgba(232,82,106,.35);color:rgba(232,82,106,.6);font-family:monospace;font-size:9px;letter-spacing:1.5px;padding:3px 10px;border-radius:20px;cursor:pointer;transition:all .2s;" onmouseover="this.style.color='#e8526a';this.style.borderColor='#e8526a'" onmouseout="this.style.color='rgba(232,82,106,.6)';this.style.borderColor='rgba(232,82,106,.35)'">↻ refresh</button>
+    </div>
     <div id="memory-list"><div style="font-size:12px;color:rgba(245,160,174,.3);font-family:monospace;padding:.5rem 0;">loading...</div></div>
 
     <div id="builtin-connections-form">
@@ -296,6 +299,8 @@ async function ghPut(path, content, msg){
 
 // ── LOAD ─────────────────────────────────────────────────────────────────────
 async function loadMemories(){
+  const btn = document.getElementById('refresh-btn');
+  if(btn){ btn.textContent='↻ loading...'; btn.disabled=true; }
   try {
     const d=await ghGet(FILE);
     extras=JSON.parse(decodeURIComponent(escape(atob(d.content.replace(/\n/g,'')))));
@@ -305,6 +310,7 @@ async function loadMemories(){
     builtinConns=JSON.parse(decodeURIComponent(escape(atob(d.content.replace(/\n/g,'')))));
   } catch{ builtinConns={}; }
   renderList(); buildConnectDropdown(); renderBuiltinConnRows();
+  if(btn){ btn.textContent='✦ done'; setTimeout(()=>{ btn.textContent='↻ refresh'; btn.disabled=false; }, 1200); }
 }
 
 function renderList(){
