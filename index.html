@@ -1048,6 +1048,7 @@ function pushLiveNotice(memories) {
   }
 
   wrap.prepend(card);
+  if (window._dbg) window._dbg('notice', { names: items.map(m => m.name) });
 }
 
 // Pan camera smoothly to a specific star by index
@@ -1079,6 +1080,7 @@ function panToStar(idx) {
 }
 
 function queueNewStarReveal(idx){
+  if (window._dbg) window._dbg('supernova', { idx, name: MEMORIES[idx] ? MEMORIES[idx].name : '?' });
   const sp = sprites[idx], rg = rings[idx];
   if(!sp || !rg) return;
   sp.userData.reveal = 0;
@@ -2079,9 +2081,10 @@ let _livePollingInterval = null;
 
 function startLivePolling() {
   if (_livePollingInterval) return;
+  if (window._dbg) window._dbg('poll_start', {});
   _livePollingInterval = setInterval(() => {
     if (!document.hidden) refreshRemoteMemories(true);
-  }, 10000); // every 10 seconds
+  }, 10000);
 }
 
 // ─── BOOT ────────────────────────────────────────────────────────────────────
@@ -2115,6 +2118,8 @@ async function refreshRemoteMemories(rebuildIfReady = true) {
   const bust = `${Date.now()}-${++_remoteFetchNonce}`;
   const prevExtraSig = JSON.stringify(_pendingExtra || []);
   const prevConnSig = JSON.stringify(_pendingBuiltinConns || {});
+  const t0 = performance.now();
+  if (window._dbg) window._dbg('poll_fire', { nonce: _remoteFetchNonce });
 
   const [extra, builtinConns] = await Promise.all([
     ghFetch('memories.json', bust).then(d => Array.isArray(d) ? d : []),
@@ -2125,6 +2130,7 @@ async function refreshRemoteMemories(rebuildIfReady = true) {
   _pendingBuiltinConns = (builtinConns && typeof builtinConns === 'object') ? builtinConns : {};
 
   const changed = JSON.stringify(_pendingExtra) !== prevExtraSig || JSON.stringify(_pendingBuiltinConns) !== prevConnSig;
+  if (window._dbg) window._dbg('poll_done', { ms: Math.round(performance.now()-t0), changed, extras: _pendingExtra.length, conns: Object.keys(_pendingBuiltinConns).length });
 
   if (changed && typeof scene !== 'undefined' && scene && rebuildIfReady) {
     applyConnectionsAndCluster();
@@ -2340,231 +2346,212 @@ function applyConnectionsAndCluster() {
   const isDebug = location.search.includes('debug') || location.hash.includes('debug');
   if (!isDebug) return;
 
-  const panel   = document.getElementById('debug-panel');
-  const logWrap = document.getElementById('dbg-log-wrap');
+  const panel = document.getElementById('debug-panel');
   panel.style.display = 'flex';
 
+  // ── State ─────────────────────────────────────────────────────────────────
+  const state = {
+    pollCount: 0, lastPollMs: null, lastPollTime: null,
+    lastResult: '—', pollActive: false,
+    nextPollAt: null, ghLimit: '—', ghRemaining: '—', ghReset: '—'
+  };
+
   // ── Logger ────────────────────────────────────────────────────────────────
-  const MAX_LOG = 120;
-  function dbgLog(msg, type = '') {
-    const now = new Date();
-    const ts  = now.toTimeString().slice(0,8);
-    const entry = document.createElement('div');
-    entry.className = 'dbg-log-entry';
-    entry.innerHTML = `<span class="dbg-log-time">${ts}</span><span class="dbg-log-msg ${type}">${msg}</span>`;
-    logWrap.prepend(entry);
-    // Trim overflow
-    while (logWrap.children.length > MAX_LOG) logWrap.lastChild.remove();
+  const logWrap = document.getElementById('dbg-log-wrap');
+  function log(msg, cls = '') {
+    const ts = new Date().toTimeString().slice(0,8);
+    const el = document.createElement('div');
+    el.className = 'dbg-log-entry';
+    el.innerHTML = `<span class="dbg-log-time">${ts}</span><span class="dbg-log-msg ${cls}">${msg}</span>`;
+    logWrap.prepend(el);
+    while (logWrap.children.length > 150) logWrap.lastChild.remove();
   }
-  dbgLog('debug kit initialised', 'info');
 
-  // ── Patch refreshRemoteMemories to instrument it ──────────────────────────
-  let _dbgPollCount = 0;
-  let _dbgLastPollTime = null;
-  let _dbgLastPollResult = '—';
-  let _dbgLastPollMs = null;
-  let _dbgNextPollAt = null;
-
-  const _origRefresh = refreshRemoteMemories;
-  window.refreshRemoteMemories = async function(rebuildIfReady = true) {
-    _dbgPollCount++;
-    const t0 = performance.now();
-    dbgLog(`poll #${_dbgPollCount} fired (rebuildIfReady=${rebuildIfReady})`, 'info');
-    const prevSig = JSON.stringify(_pendingExtra) + JSON.stringify(_pendingBuiltinConns);
-    await _origRefresh(rebuildIfReady);
-    const newSig = JSON.stringify(_pendingExtra) + JSON.stringify(_pendingBuiltinConns);
-    const changed = newSig !== prevSig;
-    _dbgLastPollMs = Math.round(performance.now() - t0);
-    _dbgLastPollTime = new Date();
-    _dbgLastPollResult = changed ? 'CHANGED' : 'no change';
-    dbgLog(
-      `poll #${_dbgPollCount} done in ${_dbgLastPollMs}ms — ${_dbgLastPollResult} (extras: ${_pendingExtra.length}, conns: ${Object.keys(_pendingBuiltinConns).length})`,
-      changed ? 'ok' : ''
-    );
-    dbgUpdateStats();
-  };
-  // Also patch startLivePolling to record next-poll timing
-  const _origStartLive = startLivePolling;
-  window.startLivePolling = function() {
-    _origStartLive();
-    _dbgNextPollAt = Date.now() + 10000;
-    dbgLog('live polling started (10s interval)', 'ok');
+  // ── Hook receiver (called from inside real functions) ─────────────────────
+  window._dbg = function(type, data) {
+    switch(type) {
+      case 'poll_start':
+        state.pollActive = true;
+        state.nextPollAt = Date.now() + 10000;
+        log('live polling started — 10s interval', 'ok');
+        break;
+      case 'poll_fire':
+        state.pollCount++;
+        state.nextPollAt = Date.now() + 10000;
+        log(`poll #${state.pollCount} fired`, 'info');
+        break;
+      case 'poll_done':
+        state.lastPollMs   = data.ms;
+        state.lastPollTime = new Date();
+        state.lastResult   = data.changed ? 'CHANGED' : 'no change';
+        log(
+          `poll #${state.pollCount} done in ${data.ms}ms — ${state.lastResult} (extras: ${data.extras}, conns: ${data.conns})`,
+          data.changed ? 'ok' : ''
+        );
+        break;
+      case 'supernova':
+        log(`★ supernova queued → idx ${data.idx} "${data.name}"`, 'ok');
+        break;
+      case 'notice':
+        log(`✦ notice shown: ${data.names.join(', ')}`, 'ok');
+        break;
+    }
   };
 
-  // ── Patch pushLiveNotice to log it ────────────────────────────────────────
-  const _origPushNotice = pushLiveNotice;
-  window.pushLiveNotice = function(memories) {
-    const list = Array.isArray(memories) ? memories : [memories];
-    const names = list.map(m => (typeof m === 'string' ? m : m.name)).join(', ');
-    dbgLog(`notice pushed: ${names}`, 'ok');
-    _origPushNotice(memories);
-  };
+  // ── Stats DOM updater ─────────────────────────────────────────────────────
+  function set(id, val, cls) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val;
+    if (cls !== undefined) el.className = 'dbg-val ' + cls;
+  }
 
-  // ── Patch queueNewStarReveal to log it ────────────────────────────────────
-  const _origQueue = queueNewStarReveal;
-  window.queueNewStarReveal = function(idx) {
-    dbgLog(`supernova queued → idx ${idx} (${MEMORIES[idx] ? MEMORIES[idx].name : '?'})`, 'ok');
-    _origQueue(idx);
-  };
-
-  // ── Stats updater ─────────────────────────────────────────────────────────
-  function dbgUpdateStats() {
+  function refreshStats() {
     // Polling
-    const pollActive = !!_livePollingInterval;
-    const ps = document.getElementById('dbg-poll-status');
-    ps.textContent  = pollActive ? 'active' : 'not started';
-    ps.className    = 'dbg-val ' + (pollActive ? 'green' : 'yellow');
+    const active = !!_livePollingInterval;
+    set('dbg-poll-status',   active ? 'active ✓' : 'not started', active ? 'green' : 'yellow');
+    set('dbg-poll-interval', '10s');
+    set('dbg-last-poll',
+      state.lastPollTime
+        ? state.lastPollTime.toTimeString().slice(0,8) + ` (${state.lastPollMs}ms)`
+        : '—');
+    const resEl = document.getElementById('dbg-last-result');
+    if (resEl) {
+      resEl.textContent = state.lastResult;
+      resEl.className = 'dbg-val ' + (state.lastResult === 'CHANGED' ? 'green' : state.lastResult === '—' ? 'dim' : '');
+    }
+    set('dbg-poll-count', state.pollCount);
 
-    document.getElementById('dbg-last-poll').textContent =
-      _dbgLastPollTime ? _dbgLastPollTime.toTimeString().slice(0,8) + ` (${_dbgLastPollMs}ms)` : '—';
-
-    const lr = document.getElementById('dbg-last-result');
-    lr.textContent = _dbgLastPollResult;
-    lr.className   = 'dbg-val ' + (_dbgLastPollResult === 'CHANGED' ? 'green' : _dbgLastPollResult === '—' ? 'dim' : '');
-
-    document.getElementById('dbg-poll-count').textContent = _dbgPollCount;
+    // Countdown
+    if (state.nextPollAt && active) {
+      const rem = Math.max(0, state.nextPollAt - Date.now());
+      const pct = Math.round((1 - rem / 10000) * 100);
+      set('dbg-countdown', (rem / 1000).toFixed(1) + 's');
+      const bar = document.getElementById('dbg-poll-bar');
+      if (bar) bar.style.width = pct + '%';
+      const bpct = document.getElementById('dbg-bar-pct');
+      if (bpct) bpct.textContent = pct + '%';
+    } else {
+      set('dbg-countdown', active ? '—' : 'not started yet');
+    }
 
     // Memories
-    const builtinCount = typeof MEMORIES_DATA !== 'undefined' ? MEMORIES_DATA.length : '?';
-    const totalLoaded  = typeof MEMORIES !== 'undefined' ? MEMORIES.length : '?';
-    const extraCount   = typeof _pendingExtra !== 'undefined' ? _pendingExtra.length : '?';
-    document.getElementById('dbg-mem-builtin').textContent = builtinCount;
-    document.getElementById('dbg-mem-extra').textContent   = extraCount;
-    document.getElementById('dbg-mem-total').textContent   = totalLoaded;
-    document.getElementById('dbg-mem-visited').textContent =
-      typeof visited !== 'undefined' ? `${visited.size} / ${totalLoaded}` : '—';
+    const builtinC = typeof MEMORIES_DATA !== 'undefined' ? MEMORIES_DATA.length : '?';
+    const extraC   = typeof _pendingExtra  !== 'undefined' ? _pendingExtra.length : '?';
+    const totalC   = typeof MEMORIES       !== 'undefined' ? MEMORIES.length      : '?';
+    const visitC   = typeof visited        !== 'undefined' ? visited.size          : 0;
+    set('dbg-mem-builtin',  builtinC);
+    set('dbg-mem-extra',    extraC, extraC > 0 ? 'green' : '');
+    set('dbg-mem-total',    totalC);
+    set('dbg-mem-visited',  `${visitC} / ${totalC}`);
 
     // Connections
-    const bConnCount = typeof _pendingBuiltinConns !== 'undefined' ? Object.keys(_pendingBuiltinConns).length : 0;
-    const eConnCount = typeof _pendingExtra !== 'undefined'
-      ? _pendingExtra.filter(m => m.connectTo !== undefined).length : 0;
-    const lineCount  = constellationLines
+    const bConn   = typeof _pendingBuiltinConns !== 'undefined' ? Object.keys(_pendingBuiltinConns).length : 0;
+    const eConn   = typeof _pendingExtra        !== 'undefined' ? _pendingExtra.filter(m => m.connectTo !== undefined).length : 0;
+    const lineCt  = (typeof constellationLines !== 'undefined' && constellationLines)
       ? (constellationLines.geometry.attributes.position.count / 2) : 0;
-    document.getElementById('dbg-conn-builtin').textContent = bConnCount;
-    document.getElementById('dbg-conn-extra').textContent   = eConnCount;
-    const cl = document.getElementById('dbg-conn-lines');
-    cl.textContent = lineCount;
-    cl.className   = 'dbg-val ' + (lineCount > 0 ? 'green' : 'dim');
+    set('dbg-conn-builtin', bConn);
+    set('dbg-conn-extra',   eConn);
+    set('dbg-conn-lines',   lineCt, lineCt > 0 ? 'green' : 'dim');
 
     // Scene
-    const sceneReady = typeof scene !== 'undefined' && !!scene;
-    const sr = document.getElementById('dbg-scene-ready');
-    sr.textContent = sceneReady ? 'yes' : 'not yet';
-    sr.className   = 'dbg-val ' + (sceneReady ? 'green' : 'yellow');
+    const sceneOk  = typeof scene   !== 'undefined' && !!scene;
+    const spriteC  = typeof sprites !== 'undefined' ? Object.keys(sprites).length : 0;
+    const burstC   = typeof supernovaBursts !== 'undefined' ? supernovaBursts.length : 0;
+    const noticeC  = document.querySelectorAll('.live-notice').length;
+    set('dbg-scene-ready', sceneOk ? 'yes ✓' : 'not yet', sceneOk ? 'green' : 'yellow');
+    set('dbg-sprites',     spriteC, spriteC > 0 ? 'green' : 'dim');
+    set('dbg-supernovas',  burstC,  burstC > 0 ? 'yellow' : '');
+    set('dbg-notices',     noticeC, noticeC > 0 ? 'yellow' : '');
 
-    const spriteCount = typeof sprites !== 'undefined' ? Object.keys(sprites).length : 0;
-    document.getElementById('dbg-sprites').textContent    = spriteCount;
-    document.getElementById('dbg-supernovas').textContent =
-      typeof supernovaBursts !== 'undefined' ? supernovaBursts.length : 0;
-    document.getElementById('dbg-notices').textContent    =
-      document.querySelectorAll('.live-notice').length;
+    // GitHub API cache
+    set('dbg-gh-limit',     state.ghLimit);
+    set('dbg-gh-remaining', state.ghRemaining,
+      state.ghRemaining === '—' ? '' :
+      parseInt(state.ghRemaining) > 20 ? 'green' :
+      parseInt(state.ghRemaining) > 5  ? 'yellow' : 'red');
+    set('dbg-gh-reset',     state.ghReset);
   }
 
-  // ── Countdown + progress bar ──────────────────────────────────────────────
-  const POLL_INTERVAL_MS = 10000;
-  setInterval(() => {
-    const now = Date.now();
-    if (_dbgNextPollAt) {
-      const remaining = Math.max(0, _dbgNextPollAt - now);
-      const pct       = Math.round((1 - remaining / POLL_INTERVAL_MS) * 100);
-      document.getElementById('dbg-countdown').textContent = (remaining / 1000).toFixed(1) + 's';
-      document.getElementById('dbg-poll-bar').style.width  = pct + '%';
-      document.getElementById('dbg-bar-pct').textContent   = pct + '%';
-      if (remaining < 200) _dbgNextPollAt = now + POLL_INTERVAL_MS; // reset
-    } else {
-      document.getElementById('dbg-countdown').textContent = '—';
-    }
-    dbgUpdateStats();
-  }, 250);
+  setInterval(refreshStats, 300);
 
   // ── Buttons ───────────────────────────────────────────────────────────────
-  document.getElementById('dbg-force-poll').addEventListener('click', () => {
-    if (_livePollingInterval) _dbgNextPollAt = Date.now() + POLL_INTERVAL_MS;
-    dbgLog('manual poll triggered', 'info');
+  document.getElementById('dbg-force-poll').onclick = () => {
+    log('manual poll triggered', 'info');
+    state.nextPollAt = Date.now() + 10000;
     refreshRemoteMemories(true);
-  });
+  };
 
-  document.getElementById('dbg-test-notice').addEventListener('click', () => {
-    dbgLog('test notice fired', 'info');
-    // Use a real star index so the fly-to works
-    const testIdx  = Math.floor(Math.random() * (typeof MEMORIES !== 'undefined' ? MEMORIES.length : 1));
-    const testName = typeof MEMORIES !== 'undefined' && MEMORIES[testIdx]
-      ? MEMORIES[testIdx].name : 'Test Memory';
-    pushLiveNotice([{ idx: testIdx, name: testName + ' [TEST]' }]);
-  });
+  document.getElementById('dbg-test-notice').onclick = () => {
+    const idx  = Math.floor(Math.random() * (typeof MEMORIES !== 'undefined' ? MEMORIES.length : 1));
+    const name = (typeof MEMORIES !== 'undefined' && MEMORIES[idx]) ? MEMORIES[idx].name : 'Test Memory';
+    log(`test notice fired → idx ${idx} "${name}"`, 'info');
+    pushLiveNotice([{ idx, name: name + ' [TEST]' }]);
+  };
 
-  document.getElementById('dbg-test-supernova').addEventListener('click', () => {
-    if (typeof scene === 'undefined' || !scene) {
-      dbgLog('scene not ready yet', 'warn'); return;
-    }
+  document.getElementById('dbg-test-supernova').onclick = () => {
+    if (typeof scene === 'undefined' || !scene) { log('scene not ready yet', 'warn'); return; }
     const idx = Math.floor(Math.random() * (typeof MEMORIES !== 'undefined' ? MEMORIES.length : 1));
-    dbgLog(`test supernova on idx ${idx} (${MEMORIES[idx] ? MEMORIES[idx].name : '?'})`, 'info');
+    log(`test supernova fired → idx ${idx}`, 'info');
     queueNewStarReveal(idx);
-  });
+  };
 
-  document.getElementById('dbg-check-gh').addEventListener('click', async () => {
-    dbgLog('checking GitHub rate limit…', 'info');
+  document.getElementById('dbg-check-gh').onclick = async () => {
+    log('checking GitHub rate limit…', 'info');
     try {
-      const r   = await fetch('https://api.github.com/rate_limit', { headers: { Accept: 'application/vnd.github.v3+json' } });
-      const d   = await r.json();
+      const r = await fetch('https://api.github.com/rate_limit', {
+        headers: { Accept: 'application/vnd.github.v3+json' }
+      });
+      const d    = await r.json();
       const core = d.resources && d.resources.core;
       if (core) {
-        const resetTime = new Date(core.reset * 1000).toTimeString().slice(0,8);
-        document.getElementById('dbg-gh-limit').textContent     = core.limit;
-        document.getElementById('dbg-gh-remaining').textContent = core.remaining;
-        document.getElementById('dbg-gh-reset').textContent     = resetTime;
-        const rem = document.getElementById('dbg-gh-remaining');
-        rem.className = 'dbg-val ' + (core.remaining > 20 ? 'green' : core.remaining > 5 ? 'yellow' : 'red');
-        dbgLog(`rate limit: ${core.remaining}/${core.limit}, resets ${resetTime}`, core.remaining > 10 ? 'ok' : 'warn');
+        state.ghLimit     = core.limit;
+        state.ghRemaining = core.remaining;
+        state.ghReset     = new Date(core.reset * 1000).toTimeString().slice(0,8);
+        log(`rate limit: ${core.remaining}/${core.limit} — resets ${state.ghReset}`,
+            core.remaining > 10 ? 'ok' : 'warn');
       }
-    } catch(e) {
-      dbgLog('rate limit fetch failed: ' + e.message, 'err');
-    }
-  });
+    } catch(e) { log('rate limit fetch failed: ' + e.message, 'err'); }
+  };
 
-  document.getElementById('dbg-clear-log').addEventListener('click', () => {
+  document.getElementById('dbg-clear-log').onclick = () => {
     logWrap.innerHTML = '';
-    dbgLog('log cleared', 'info');
-  });
+    log('log cleared', 'info');
+  };
 
   // ── Minimise / close ──────────────────────────────────────────────────────
-  document.getElementById('dbg-min-btn').addEventListener('click', () => {
+  document.getElementById('dbg-min-btn').onclick = () => {
     panel.classList.toggle('dbg-minimised');
-    document.getElementById('dbg-min-btn').textContent = panel.classList.contains('dbg-minimised') ? '+' : '—';
-  });
-  document.getElementById('dbg-close-btn').addEventListener('click', () => {
+    document.getElementById('dbg-min-btn').textContent =
+      panel.classList.contains('dbg-minimised') ? '+' : '—';
+  };
+  document.getElementById('dbg-close-btn').onclick = () => {
     panel.style.display = 'none';
-    dbgLog('panel closed (reload with ?debug to reopen)', 'info');
-  });
+  };
 
   // ── Draggable ─────────────────────────────────────────────────────────────
-  const header = document.getElementById('dbg-header');
-  let dragState = null;
-  header.addEventListener('mousedown', e => {
+  let drag = null;
+  document.getElementById('dbg-header').addEventListener('mousedown', e => {
     if (e.target.closest('.dbg-hbtn')) return;
-    const rect = panel.getBoundingClientRect();
-    dragState = { ox: e.clientX - rect.left, oy: e.clientY - rect.top };
-    panel.style.transition = 'none';
+    const r = panel.getBoundingClientRect();
+    drag = { ox: e.clientX - r.left, oy: e.clientY - r.top };
     e.preventDefault();
   });
   document.addEventListener('mousemove', e => {
-    if (!dragState) return;
-    let nx = e.clientX - dragState.ox;
-    let ny = e.clientY - dragState.oy;
-    nx = Math.max(0, Math.min(window.innerWidth  - panel.offsetWidth,  nx));
-    ny = Math.max(0, Math.min(window.innerHeight - panel.offsetHeight, ny));
-    panel.style.right  = 'auto';
-    panel.style.bottom = 'auto';
-    panel.style.left   = nx + 'px';
-    panel.style.top    = ny + 'px';
+    if (!drag) return;
+    const nx = Math.max(0, Math.min(window.innerWidth  - panel.offsetWidth,  e.clientX - drag.ox));
+    const ny = Math.max(0, Math.min(window.innerHeight - panel.offsetHeight, e.clientY - drag.oy));
+    panel.style.right = panel.style.bottom = 'auto';
+    panel.style.left  = nx + 'px';
+    panel.style.top   = ny + 'px';
   });
-  document.addEventListener('mouseup', () => { dragState = null; });
+  document.addEventListener('mouseup', () => { drag = null; });
 
-  // ── Initial stats fill ────────────────────────────────────────────────────
-  dbgLog('checking URL: ?debug or #debug detected', 'info');
-  dbgUpdateStats();
-  // Trigger GH rate limit check automatically on open
-  setTimeout(() => document.getElementById('dbg-check-gh').click(), 800);
+  // ── Boot ──────────────────────────────────────────────────────────────────
+  log('debug kit active — polling every 10s once sky opens', 'info');
+  log(`URL: ${location.href}`, 'info');
+  refreshStats();
+  setTimeout(() => document.getElementById('dbg-check-gh').click(), 600);
 })();
 </script>
 <audio id="bg-music" loop preload="auto" src="./music.mp3"></audio>
