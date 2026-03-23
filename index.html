@@ -299,6 +299,96 @@ html, body { width:100%; height:100%; overflow:hidden; background:#00010f; font-
   .star-label { font-size:7.5px; }
 }
 
+/* ── DEBUG KIT ──────────────────────────────────────────────────────────────── */
+#debug-panel {
+  position:fixed; bottom:16px; right:16px; z-index:9000;
+  width:340px; max-height:calc(100vh - 32px);
+  background:rgba(8,2,18,.97); border:1px solid rgba(232,82,106,.5);
+  border-radius:14px; font-family:monospace; font-size:11px;
+  color:#f5a0ae; display:flex; flex-direction:column;
+  box-shadow:0 12px 40px rgba(0,0,0,.7), 0 0 30px rgba(232,82,106,.1);
+  overflow:hidden; user-select:none;
+}
+#debug-panel.dbg-minimised #dbg-body { display:none; }
+#dbg-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:9px 12px; border-bottom:1px solid rgba(232,82,106,.2);
+  cursor:move; background:rgba(232,82,106,.07); flex-shrink:0;
+}
+#dbg-title { color:#e8526a; letter-spacing:2px; font-size:10px; }
+#dbg-header-btns { display:flex; gap:6px; }
+.dbg-hbtn {
+  background:none; border:none; color:rgba(232,82,106,.6);
+  cursor:pointer; font-size:13px; line-height:1; padding:0 2px;
+  font-family:monospace;
+}
+.dbg-hbtn:hover { color:#e8526a; }
+#dbg-body { overflow-y:auto; flex:1; display:flex; flex-direction:column; }
+.dbg-section {
+  padding:9px 12px; border-bottom:1px solid rgba(232,82,106,.12);
+}
+.dbg-section-title {
+  font-size:9px; letter-spacing:2px; color:rgba(232,82,106,.5);
+  text-transform:uppercase; margin-bottom:6px;
+}
+.dbg-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:2px 0; gap:8px;
+}
+.dbg-label { color:rgba(245,160,174,.55); flex-shrink:0; }
+.dbg-val { color:#fde8eb; text-align:right; word-break:break-all; }
+.dbg-val.green { color:#5dcaa5; }
+.dbg-val.yellow { color:#f0c060; }
+.dbg-val.red { color:#e8526a; }
+.dbg-val.dim { color:rgba(245,160,174,.35); }
+#dbg-countdown {
+  font-size:13px; font-weight:bold; color:#e8526a;
+  letter-spacing:1px;
+}
+.dbg-btns {
+  padding:8px 12px; display:flex; flex-wrap:wrap; gap:5px;
+  border-bottom:1px solid rgba(232,82,106,.12);
+}
+.dbg-btn {
+  background:rgba(232,82,106,.1); border:1px solid rgba(232,82,106,.3);
+  color:#e8526a; border-radius:6px; padding:4px 9px;
+  font-size:10px; letter-spacing:1px; cursor:pointer;
+  font-family:monospace; transition:all .2s; white-space:nowrap;
+}
+.dbg-btn:hover { background:rgba(232,82,106,.22); border-color:#e8526a; }
+.dbg-btn:active { transform:scale(.96); }
+.dbg-btn.warn { border-color:rgba(240,192,96,.4); color:#f0c060; background:rgba(240,192,96,.08); }
+.dbg-btn.warn:hover { background:rgba(240,192,96,.18); border-color:#f0c060; }
+#dbg-log-wrap {
+  flex:1; min-height:90px; max-height:180px; overflow-y:auto;
+  padding:6px 12px 8px; display:flex; flex-direction:column; gap:2px;
+}
+.dbg-log-entry {
+  font-size:10px; line-height:1.5; padding:1px 0;
+  border-bottom:1px solid rgba(232,82,106,.06);
+  display:flex; gap:6px; align-items:baseline;
+}
+.dbg-log-time { color:rgba(232,82,106,.4); flex-shrink:0; }
+.dbg-log-msg { color:rgba(245,200,210,.75); }
+.dbg-log-msg.ok { color:#5dcaa5; }
+.dbg-log-msg.warn { color:#f0c060; }
+.dbg-log-msg.err { color:#e8526a; }
+.dbg-log-msg.info { color:rgba(180,200,255,.8); }
+#dbg-poll-bar-wrap {
+  padding:6px 12px 8px; border-bottom:1px solid rgba(232,82,106,.12);
+}
+#dbg-poll-bar-label {
+  font-size:9px; color:rgba(232,82,106,.45); letter-spacing:1.5px;
+  text-transform:uppercase; margin-bottom:4px;
+  display:flex; justify-content:space-between; align-items:center;
+}
+#dbg-poll-bar-bg {
+  height:3px; background:rgba(232,82,106,.12); border-radius:2px; overflow:hidden;
+}
+#dbg-poll-bar {
+  height:100%; background:#e8526a; border-radius:2px;
+  transition:width .25s linear; width:0%;
+}
 /* Loading screen */
 #loader {
   position:fixed; inset:0; z-index:100;
@@ -2244,7 +2334,381 @@ function applyConnectionsAndCluster() {
   loader.classList.add('hide');
   setTimeout(()=>{ loader.style.display='none'; }, 1100);
 })(); // first shooter after 5s
+
+// ─── DEBUG KIT ────────────────────────────────────────────────────────────────
+(function initDebugKit() {
+  const isDebug = location.search.includes('debug') || location.hash.includes('debug');
+  if (!isDebug) return;
+
+  const panel   = document.getElementById('debug-panel');
+  const logWrap = document.getElementById('dbg-log-wrap');
+  panel.style.display = 'flex';
+
+  // ── Logger ────────────────────────────────────────────────────────────────
+  const MAX_LOG = 120;
+  function dbgLog(msg, type = '') {
+    const now = new Date();
+    const ts  = now.toTimeString().slice(0,8);
+    const entry = document.createElement('div');
+    entry.className = 'dbg-log-entry';
+    entry.innerHTML = `<span class="dbg-log-time">${ts}</span><span class="dbg-log-msg ${type}">${msg}</span>`;
+    logWrap.prepend(entry);
+    // Trim overflow
+    while (logWrap.children.length > MAX_LOG) logWrap.lastChild.remove();
+  }
+  dbgLog('debug kit initialised', 'info');
+
+  // ── Patch refreshRemoteMemories to instrument it ──────────────────────────
+  let _dbgPollCount = 0;
+  let _dbgLastPollTime = null;
+  let _dbgLastPollResult = '—';
+  let _dbgLastPollMs = null;
+  let _dbgNextPollAt = null;
+
+  const _origRefresh = refreshRemoteMemories;
+  window.refreshRemoteMemories = async function(rebuildIfReady = true) {
+    _dbgPollCount++;
+    const t0 = performance.now();
+    dbgLog(`poll #${_dbgPollCount} fired (rebuildIfReady=${rebuildIfReady})`, 'info');
+    const prevSig = JSON.stringify(_pendingExtra) + JSON.stringify(_pendingBuiltinConns);
+    await _origRefresh(rebuildIfReady);
+    const newSig = JSON.stringify(_pendingExtra) + JSON.stringify(_pendingBuiltinConns);
+    const changed = newSig !== prevSig;
+    _dbgLastPollMs = Math.round(performance.now() - t0);
+    _dbgLastPollTime = new Date();
+    _dbgLastPollResult = changed ? 'CHANGED' : 'no change';
+    dbgLog(
+      `poll #${_dbgPollCount} done in ${_dbgLastPollMs}ms — ${_dbgLastPollResult} (extras: ${_pendingExtra.length}, conns: ${Object.keys(_pendingBuiltinConns).length})`,
+      changed ? 'ok' : ''
+    );
+    dbgUpdateStats();
+  };
+  // Also patch startLivePolling to record next-poll timing
+  const _origStartLive = startLivePolling;
+  window.startLivePolling = function() {
+    _origStartLive();
+    _dbgNextPollAt = Date.now() + 10000;
+    dbgLog('live polling started (10s interval)', 'ok');
+  };
+
+  // ── Patch pushLiveNotice to log it ────────────────────────────────────────
+  const _origPushNotice = pushLiveNotice;
+  window.pushLiveNotice = function(memories) {
+    const list = Array.isArray(memories) ? memories : [memories];
+    const names = list.map(m => (typeof m === 'string' ? m : m.name)).join(', ');
+    dbgLog(`notice pushed: ${names}`, 'ok');
+    _origPushNotice(memories);
+  };
+
+  // ── Patch queueNewStarReveal to log it ────────────────────────────────────
+  const _origQueue = queueNewStarReveal;
+  window.queueNewStarReveal = function(idx) {
+    dbgLog(`supernova queued → idx ${idx} (${MEMORIES[idx] ? MEMORIES[idx].name : '?'})`, 'ok');
+    _origQueue(idx);
+  };
+
+  // ── Stats updater ─────────────────────────────────────────────────────────
+  function dbgUpdateStats() {
+    // Polling
+    const pollActive = !!_livePollingInterval;
+    const ps = document.getElementById('dbg-poll-status');
+    ps.textContent  = pollActive ? 'active' : 'not started';
+    ps.className    = 'dbg-val ' + (pollActive ? 'green' : 'yellow');
+
+    document.getElementById('dbg-last-poll').textContent =
+      _dbgLastPollTime ? _dbgLastPollTime.toTimeString().slice(0,8) + ` (${_dbgLastPollMs}ms)` : '—';
+
+    const lr = document.getElementById('dbg-last-result');
+    lr.textContent = _dbgLastPollResult;
+    lr.className   = 'dbg-val ' + (_dbgLastPollResult === 'CHANGED' ? 'green' : _dbgLastPollResult === '—' ? 'dim' : '');
+
+    document.getElementById('dbg-poll-count').textContent = _dbgPollCount;
+
+    // Memories
+    const builtinCount = typeof MEMORIES_DATA !== 'undefined' ? MEMORIES_DATA.length : '?';
+    const totalLoaded  = typeof MEMORIES !== 'undefined' ? MEMORIES.length : '?';
+    const extraCount   = typeof _pendingExtra !== 'undefined' ? _pendingExtra.length : '?';
+    document.getElementById('dbg-mem-builtin').textContent = builtinCount;
+    document.getElementById('dbg-mem-extra').textContent   = extraCount;
+    document.getElementById('dbg-mem-total').textContent   = totalLoaded;
+    document.getElementById('dbg-mem-visited').textContent =
+      typeof visited !== 'undefined' ? `${visited.size} / ${totalLoaded}` : '—';
+
+    // Connections
+    const bConnCount = typeof _pendingBuiltinConns !== 'undefined' ? Object.keys(_pendingBuiltinConns).length : 0;
+    const eConnCount = typeof _pendingExtra !== 'undefined'
+      ? _pendingExtra.filter(m => m.connectTo !== undefined).length : 0;
+    const lineCount  = constellationLines
+      ? (constellationLines.geometry.attributes.position.count / 2) : 0;
+    document.getElementById('dbg-conn-builtin').textContent = bConnCount;
+    document.getElementById('dbg-conn-extra').textContent   = eConnCount;
+    const cl = document.getElementById('dbg-conn-lines');
+    cl.textContent = lineCount;
+    cl.className   = 'dbg-val ' + (lineCount > 0 ? 'green' : 'dim');
+
+    // Scene
+    const sceneReady = typeof scene !== 'undefined' && !!scene;
+    const sr = document.getElementById('dbg-scene-ready');
+    sr.textContent = sceneReady ? 'yes' : 'not yet';
+    sr.className   = 'dbg-val ' + (sceneReady ? 'green' : 'yellow');
+
+    const spriteCount = typeof sprites !== 'undefined' ? Object.keys(sprites).length : 0;
+    document.getElementById('dbg-sprites').textContent    = spriteCount;
+    document.getElementById('dbg-supernovas').textContent =
+      typeof supernovaBursts !== 'undefined' ? supernovaBursts.length : 0;
+    document.getElementById('dbg-notices').textContent    =
+      document.querySelectorAll('.live-notice').length;
+  }
+
+  // ── Countdown + progress bar ──────────────────────────────────────────────
+  const POLL_INTERVAL_MS = 10000;
+  setInterval(() => {
+    const now = Date.now();
+    if (_dbgNextPollAt) {
+      const remaining = Math.max(0, _dbgNextPollAt - now);
+      const pct       = Math.round((1 - remaining / POLL_INTERVAL_MS) * 100);
+      document.getElementById('dbg-countdown').textContent = (remaining / 1000).toFixed(1) + 's';
+      document.getElementById('dbg-poll-bar').style.width  = pct + '%';
+      document.getElementById('dbg-bar-pct').textContent   = pct + '%';
+      if (remaining < 200) _dbgNextPollAt = now + POLL_INTERVAL_MS; // reset
+    } else {
+      document.getElementById('dbg-countdown').textContent = '—';
+    }
+    dbgUpdateStats();
+  }, 250);
+
+  // ── Buttons ───────────────────────────────────────────────────────────────
+  document.getElementById('dbg-force-poll').addEventListener('click', () => {
+    if (_livePollingInterval) _dbgNextPollAt = Date.now() + POLL_INTERVAL_MS;
+    dbgLog('manual poll triggered', 'info');
+    refreshRemoteMemories(true);
+  });
+
+  document.getElementById('dbg-test-notice').addEventListener('click', () => {
+    dbgLog('test notice fired', 'info');
+    // Use a real star index so the fly-to works
+    const testIdx  = Math.floor(Math.random() * (typeof MEMORIES !== 'undefined' ? MEMORIES.length : 1));
+    const testName = typeof MEMORIES !== 'undefined' && MEMORIES[testIdx]
+      ? MEMORIES[testIdx].name : 'Test Memory';
+    pushLiveNotice([{ idx: testIdx, name: testName + ' [TEST]' }]);
+  });
+
+  document.getElementById('dbg-test-supernova').addEventListener('click', () => {
+    if (typeof scene === 'undefined' || !scene) {
+      dbgLog('scene not ready yet', 'warn'); return;
+    }
+    const idx = Math.floor(Math.random() * (typeof MEMORIES !== 'undefined' ? MEMORIES.length : 1));
+    dbgLog(`test supernova on idx ${idx} (${MEMORIES[idx] ? MEMORIES[idx].name : '?'})`, 'info');
+    queueNewStarReveal(idx);
+  });
+
+  document.getElementById('dbg-check-gh').addEventListener('click', async () => {
+    dbgLog('checking GitHub rate limit…', 'info');
+    try {
+      const r   = await fetch('https://api.github.com/rate_limit', { headers: { Accept: 'application/vnd.github.v3+json' } });
+      const d   = await r.json();
+      const core = d.resources && d.resources.core;
+      if (core) {
+        const resetTime = new Date(core.reset * 1000).toTimeString().slice(0,8);
+        document.getElementById('dbg-gh-limit').textContent     = core.limit;
+        document.getElementById('dbg-gh-remaining').textContent = core.remaining;
+        document.getElementById('dbg-gh-reset').textContent     = resetTime;
+        const rem = document.getElementById('dbg-gh-remaining');
+        rem.className = 'dbg-val ' + (core.remaining > 20 ? 'green' : core.remaining > 5 ? 'yellow' : 'red');
+        dbgLog(`rate limit: ${core.remaining}/${core.limit}, resets ${resetTime}`, core.remaining > 10 ? 'ok' : 'warn');
+      }
+    } catch(e) {
+      dbgLog('rate limit fetch failed: ' + e.message, 'err');
+    }
+  });
+
+  document.getElementById('dbg-clear-log').addEventListener('click', () => {
+    logWrap.innerHTML = '';
+    dbgLog('log cleared', 'info');
+  });
+
+  // ── Minimise / close ──────────────────────────────────────────────────────
+  document.getElementById('dbg-min-btn').addEventListener('click', () => {
+    panel.classList.toggle('dbg-minimised');
+    document.getElementById('dbg-min-btn').textContent = panel.classList.contains('dbg-minimised') ? '+' : '—';
+  });
+  document.getElementById('dbg-close-btn').addEventListener('click', () => {
+    panel.style.display = 'none';
+    dbgLog('panel closed (reload with ?debug to reopen)', 'info');
+  });
+
+  // ── Draggable ─────────────────────────────────────────────────────────────
+  const header = document.getElementById('dbg-header');
+  let dragState = null;
+  header.addEventListener('mousedown', e => {
+    if (e.target.closest('.dbg-hbtn')) return;
+    const rect = panel.getBoundingClientRect();
+    dragState = { ox: e.clientX - rect.left, oy: e.clientY - rect.top };
+    panel.style.transition = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragState) return;
+    let nx = e.clientX - dragState.ox;
+    let ny = e.clientY - dragState.oy;
+    nx = Math.max(0, Math.min(window.innerWidth  - panel.offsetWidth,  nx));
+    ny = Math.max(0, Math.min(window.innerHeight - panel.offsetHeight, ny));
+    panel.style.right  = 'auto';
+    panel.style.bottom = 'auto';
+    panel.style.left   = nx + 'px';
+    panel.style.top    = ny + 'px';
+  });
+  document.addEventListener('mouseup', () => { dragState = null; });
+
+  // ── Initial stats fill ────────────────────────────────────────────────────
+  dbgLog('checking URL: ?debug or #debug detected', 'info');
+  dbgUpdateStats();
+  // Trigger GH rate limit check automatically on open
+  setTimeout(() => document.getElementById('dbg-check-gh').click(), 800);
+})();
 </script>
 <audio id="bg-music" loop preload="auto" src="./music.mp3"></audio>
-</body>
+
+<!-- ═══════════════════════ DEBUG PANEL ═══════════════════════ -->
+<div id="debug-panel" style="display:none;">
+  <div id="dbg-header">
+    <span id="dbg-title">✦ DEBUG KIT</span>
+    <div id="dbg-header-btns">
+      <button class="dbg-hbtn" id="dbg-min-btn" title="minimise">—</button>
+      <button class="dbg-hbtn" id="dbg-close-btn" title="close">✕</button>
+    </div>
+  </div>
+  <div id="dbg-body">
+
+    <!-- POLL STATUS -->
+    <div class="dbg-section">
+      <div class="dbg-section-title">live polling</div>
+      <div class="dbg-row">
+        <span class="dbg-label">status</span>
+        <span class="dbg-val" id="dbg-poll-status">waiting</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">interval</span>
+        <span class="dbg-val" id="dbg-poll-interval">10s</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">last poll</span>
+        <span class="dbg-val" id="dbg-last-poll">—</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">last result</span>
+        <span class="dbg-val" id="dbg-last-result">—</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">total polls</span>
+        <span class="dbg-val" id="dbg-poll-count">0</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">next poll in</span>
+        <span class="dbg-val" id="dbg-countdown">—</span>
+      </div>
+    </div>
+
+    <!-- POLL PROGRESS BAR -->
+    <div id="dbg-poll-bar-wrap">
+      <div id="dbg-poll-bar-label">
+        <span>next poll</span>
+        <span id="dbg-bar-pct">—</span>
+      </div>
+      <div id="dbg-poll-bar-bg"><div id="dbg-poll-bar"></div></div>
+    </div>
+
+    <!-- MEMORIES -->
+    <div class="dbg-section">
+      <div class="dbg-section-title">memories</div>
+      <div class="dbg-row">
+        <span class="dbg-label">built-in</span>
+        <span class="dbg-val" id="dbg-mem-builtin">—</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">added (github)</span>
+        <span class="dbg-val" id="dbg-mem-extra">—</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">total loaded</span>
+        <span class="dbg-val" id="dbg-mem-total">—</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">visited</span>
+        <span class="dbg-val" id="dbg-mem-visited">—</span>
+      </div>
+    </div>
+
+    <!-- CONNECTIONS -->
+    <div class="dbg-section">
+      <div class="dbg-section-title">constellation lines</div>
+      <div class="dbg-row">
+        <span class="dbg-label">active lines</span>
+        <span class="dbg-val" id="dbg-conn-lines">—</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">builtin conns</span>
+        <span class="dbg-val" id="dbg-conn-builtin">—</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">extra conns</span>
+        <span class="dbg-val" id="dbg-conn-extra">—</span>
+      </div>
+    </div>
+
+    <!-- GITHUB API -->
+    <div class="dbg-section">
+      <div class="dbg-section-title">github api</div>
+      <div class="dbg-row">
+        <span class="dbg-label">rate limit</span>
+        <span class="dbg-val" id="dbg-gh-limit">—</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">remaining</span>
+        <span class="dbg-val" id="dbg-gh-remaining">—</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">resets at</span>
+        <span class="dbg-val" id="dbg-gh-reset">—</span>
+      </div>
+    </div>
+
+    <!-- SCENE -->
+    <div class="dbg-section">
+      <div class="dbg-section-title">scene</div>
+      <div class="dbg-row">
+        <span class="dbg-label">scene ready</span>
+        <span class="dbg-val" id="dbg-scene-ready">—</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">sprites in scene</span>
+        <span class="dbg-val" id="dbg-sprites">—</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">active supernovas</span>
+        <span class="dbg-val" id="dbg-supernovas">—</span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">active notices</span>
+        <span class="dbg-val" id="dbg-notices">—</span>
+      </div>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="dbg-btns">
+      <button class="dbg-btn" id="dbg-force-poll">⟳ Force Poll</button>
+      <button class="dbg-btn" id="dbg-test-notice">✦ Test Notice</button>
+      <button class="dbg-btn" id="dbg-test-supernova">★ Test Supernova</button>
+      <button class="dbg-btn" id="dbg-check-gh">⬡ Check GH API</button>
+      <button class="dbg-btn warn" id="dbg-clear-log">✕ Clear Log</button>
+    </div>
+
+    <!-- LOG -->
+    <div class="dbg-section" style="padding-bottom:4px;">
+      <div class="dbg-section-title">event log</div>
+    </div>
+    <div id="dbg-log-wrap"></div>
+
+  </div>
+</div>
 </html>
