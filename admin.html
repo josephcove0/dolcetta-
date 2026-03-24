@@ -159,6 +159,9 @@
 
   <script>
     const CONFIG_KEY = 'dolcetta_supabase_config_v1';
+    const DEFAULT_SUPABASE_URL = 'https://hlohijjsctkfdiyrgmuqp.supabase.co';
+    const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsb2hpanNjdGtmZGl5cmdtdXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNzE5OTYsImV4cCI6MjA4OTk0Nzk5Nn0.18_gY5ohSwQTRx0-HKdEhe9dvkPzl3SXANLv-EiTwDo';
+    const DEFAULT_SUPABASE_TABLE = 'memories';
     let supabaseClient = null;
     let currentRows = [];
     let photoBase64 = '';
@@ -182,13 +185,16 @@
     }
 
     function loadConfigLocal() {
+      $('sbUrl').value = DEFAULT_SUPABASE_URL;
+      $('sbKey').value = DEFAULT_SUPABASE_KEY;
+      $('tableName').value = DEFAULT_SUPABASE_TABLE;
       try {
         const raw = localStorage.getItem(CONFIG_KEY);
         if (!raw) return;
         const cfg = JSON.parse(raw);
-        $('sbUrl').value = cfg.url || '';
-        $('sbKey').value = cfg.key || '';
-        $('tableName').value = cfg.table || 'memories';
+        $('sbUrl').value = cfg.url || DEFAULT_SUPABASE_URL;
+        $('sbKey').value = cfg.key || DEFAULT_SUPABASE_KEY;
+        $('tableName').value = cfg.table || DEFAULT_SUPABASE_TABLE;
       } catch {}
     }
 
@@ -386,6 +392,7 @@
     $('reloadBtn').addEventListener('click', loadMemories);
 
     loadConfigLocal();
+    connectSupabase();
   </script>
 </body>
 </html>
