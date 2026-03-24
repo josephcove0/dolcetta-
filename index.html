@@ -734,16 +734,34 @@ function generateStarPositions(data) {
 
 const MEMORIES = generateStarPositions(MEMORIES_DATA);
 
-const SUPABASE_URL = 'https://hlohijjsctkfdiyrgmuqp.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsb2hpanNjdGtmZGl5cmdtdXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNzE5OTYsImV4cCI6MjA4OTk0Nzk5Nn0.18_gY5ohSwQTRx0-HKdEhe9dvkPzl3SXANLv-EiTwDo';
-const SUPABASE_TABLE = 'memories';
+const CONFIG_KEY = 'dolcetta_supabase_config_v1';
+const DEFAULT_SUPABASE_URL = 'https://hlohijjsctkfdiyrgmuqp.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsb2hpanNjdGtmZGl5cmdtdXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNzE5OTYsImV4cCI6MjA4OTk0Nzk5Nn0.18_gY5ohSwQTRx0-HKdEhe9dvkPzl3SXANLv-EiTwDo';
+const DEFAULT_SUPABASE_TABLE = 'memories';
+let SUPABASE_URL = DEFAULT_SUPABASE_URL;
+let SUPABASE_ANON_KEY = DEFAULT_SUPABASE_ANON_KEY;
+let SUPABASE_TABLE = DEFAULT_SUPABASE_TABLE;
 let supabaseClient = null;
+
+function loadSupabaseConfig() {
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    if (!raw) return;
+    const cfg = JSON.parse(raw) || {};
+    SUPABASE_URL = (cfg.url || DEFAULT_SUPABASE_URL).trim();
+    SUPABASE_ANON_KEY = (cfg.key || DEFAULT_SUPABASE_ANON_KEY).trim();
+    SUPABASE_TABLE = (cfg.table || DEFAULT_SUPABASE_TABLE).trim() || DEFAULT_SUPABASE_TABLE;
+  } catch (err) {
+    console.warn('Failed to read local Supabase config:', err);
+  }
+}
 
 function getSupabaseClient() {
   if (supabaseClient) return supabaseClient;
   if (!window.supabase || !window.supabase.createClient) {
     throw new Error('Supabase client failed to load');
   }
+  loadSupabaseConfig();
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   return supabaseClient;
 }
@@ -1004,6 +1022,8 @@ function makeStar2DCanvas(sz,rgb,isRing){
 let scene,camera,renderer,raycaster,mouse;
 let hitboxes=[],sprites={},rings={};
 let isMouseDown=false,isDragging=false,prevM={x:0,y:0},rotV={x:0,y:0};
+let pointerLockMoveAttached = false;
+let pointerLockActive = false;
 let modalOpen=false;
 let openModalIdx = null;
 let lastTouchTime = 0;
@@ -1695,6 +1715,7 @@ function initThree(){
   setupEvents();
   animate();
   startLivePolling();
+  refreshRemoteMemories(true);
   window.addEventListener('resize',onResize);
 }
 
@@ -2188,6 +2209,70 @@ function animate(now=0){
 function setupEvents(){
   const el=renderer.domElement;
   let mdx=0,mdy=0;
+  let mouseDownEvent = null;
+
+  function applyLookDelta(dxPx, dyPx, scale = 0.0028) {
+    const dx = dxPx * scale;
+    const dy = dyPx * scale;
+    scene.rotation.y += dx;
+    scene.rotation.x += dy;
+    rotV.y = rotV.y * 0.3 + dx * 0.7;
+    rotV.x = rotV.x * 0.3 + dy * 0.7;
+  }
+
+  function onPointerLockMove(e){
+    if(!isMouseDown || document.pointerLockElement !== el) return;
+    const mx = e.movementX || 0;
+    const my = e.movementY || 0;
+    if(mx || my) isDragging = true;
+    applyLookDelta(mx, my);
+  }
+
+  function attachPointerLockMove(){
+    if(pointerLockMoveAttached) return;
+    document.addEventListener('mousemove', onPointerLockMove);
+    pointerLockMoveAttached = true;
+  }
+
+  function detachPointerLockMove(){
+    if(!pointerLockMoveAttached) return;
+    document.removeEventListener('mousemove', onPointerLockMove);
+    pointerLockMoveAttached = false;
+  }
+
+  function onPointerLockChange(){
+    pointerLockActive = document.pointerLockElement === el;
+    if(pointerLockActive){
+      attachPointerLockMove();
+      hideTooltip();
+    } else {
+      detachPointerLockMove();
+      if(isMouseDown) el.classList.remove('drag');
+    }
+  }
+
+  function finishMouseInteraction(e){
+    if(lastTouchTime && Date.now()-lastTouchTime < 600) return;
+    const wasDragging = isDragging;
+    const clickEvent = mouseDownEvent || e;
+    isMouseDown=false;
+    isDragging=false;
+    el.classList.remove('drag');
+    window.removeEventListener('mousemove',onMouseMove);
+    if(document.pointerLockElement === el && document.exitPointerLock){
+      document.exitPointerLock();
+    }
+    if(!wasDragging && clickEvent){
+      doClick({ clientX: clickEvent.clientX, clientY: clickEvent.clientY });
+    }
+    mouseDownEvent = null;
+  }
+
+  document.addEventListener('pointerlockchange', onPointerLockChange);
+  document.addEventListener('pointerlockerror', () => {
+    pointerLockActive = false;
+    detachPointerLockMove();
+  });
 
   el.addEventListener('mousedown',e=>{
     if(modalOpen)return;
@@ -2195,17 +2280,15 @@ function setupEvents(){
     isMouseDown=true; isDragging=false; hintPan=null; hintTrailVel={x:0,y:0};
     rotV={x:0,y:0}; hideTooltip(); if(journalOpen) closeJournal();
     mdx=e.clientX; mdy=e.clientY; prevM={x:e.clientX,y:e.clientY};
+    mouseDownEvent = { clientX: e.clientX, clientY: e.clientY };
     el.classList.add('drag');
-    window.addEventListener('mousemove',onMouseMove);
+    if(!hasCoarsePointer && el.requestPointerLock){
+      el.requestPointerLock();
+    } else {
+      window.addEventListener('mousemove',onMouseMove);
+    }
   });
-  window.addEventListener('mouseup',e=>{
-    // Ignore synthetic mouse events generated from touch
-    if(lastTouchTime && Date.now()-lastTouchTime < 600) return;
-    isMouseDown=false; el.classList.remove('drag');
-    window.removeEventListener('mousemove',onMouseMove);
-    if(!isDragging&&Math.hypot(e.clientX-mdx,e.clientY-mdy)<5) doClick(e);
-    isDragging=false;
-  });
+  window.addEventListener('mouseup',finishMouseInteraction);
   el.addEventListener('touchstart',e=>{
     if(modalOpen)return;
     lastTouchTime = Date.now();
@@ -2216,10 +2299,9 @@ function setupEvents(){
   el.addEventListener('touchmove',e=>{
     if(e.touches.length > 1) return;
     isDragging=true;
-    const dx=(e.touches[0].clientX-prevM.x)*0.004;
-    const dy=(e.touches[0].clientY-prevM.y)*0.004;
-    scene.rotation.y+=dx; scene.rotation.x+=dy;
-    rotV.y=rotV.y*0.3+dx*0.7; rotV.x=rotV.x*0.3+dy*0.7;
+    const dxPx=(e.touches[0].clientX-prevM.x);
+    const dyPx=(e.touches[0].clientY-prevM.y);
+    applyLookDelta(dxPx, dyPx, 0.004);
     prevM={x:e.touches[0].clientX,y:e.touches[0].clientY};
   },{passive:true});
   el.addEventListener('touchend',e=>{
@@ -2302,11 +2384,12 @@ function hideTooltip(){
 }
 
 function onMouseMove(e){
-  if(!isMouseDown)return;
+  if(!isMouseDown || pointerLockActive)return;
   isDragging=true;
   const dx=(e.clientX-prevM.x)*.0028, dy=(e.clientY-prevM.y)*.0028;
   scene.rotation.y+=dx; scene.rotation.x+=dy;
-  rotV.y=dx*.35; rotV.x=dy*.35;
+  rotV.y=rotV.y*0.3 + dx*0.7;
+  rotV.x=rotV.x*0.3 + dy*0.7;
   prevM={x:e.clientX,y:e.clientY};
 }
 
@@ -2448,6 +2531,7 @@ function startLivePolling() {
 }
 
 let _supabaseLiveChannel = null;
+let _crossTabMemoryBus = null;
 const crossTabMemoryChannel = 'dolcetta-memory-live';
 
 function startSupabaseRealtime(){
@@ -2478,8 +2562,9 @@ function startSupabaseRealtime(){
 
 function startCrossTabMemorySync(){
   if (!('BroadcastChannel' in window)) return;
-  const bc = new BroadcastChannel(crossTabMemoryChannel);
-  bc.addEventListener('message', event => {
+  if (_crossTabMemoryBus) return;
+  _crossTabMemoryBus = new BroadcastChannel(crossTabMemoryChannel);
+  _crossTabMemoryBus.addEventListener('message', event => {
     const msg = event.data || {};
     if (msg.type === 'memory-deleted' && msg.id != null) {
       _pendingExtra = (_pendingExtra || []).filter(row => String(row.id) !== String(msg.id));
@@ -2597,6 +2682,13 @@ function applyConnectionsAndCluster() {
   _pendingExtra.forEach((row, extraIndex) => {
     const absIndex = builtinCount + extraIndex;
     if (!MEMORIES[absIndex]) return;
+    MEMORIES[absIndex].id = row.id ?? MEMORIES[absIndex].id ?? null;
+    MEMORIES[absIndex].rowId = row.rowId ?? row.id ?? MEMORIES[absIndex].rowId ?? null;
+    MEMORIES[absIndex].name = row.name || MEMORIES[absIndex].name;
+    MEMORIES[absIndex].text = row.text || '';
+    MEMORIES[absIndex].photo = row.photo || '';
+    MEMORIES[absIndex].sz = Number.isFinite(row.sz) ? row.sz : MEMORIES[absIndex].sz;
+    MEMORIES[absIndex].created_at = row.created_at || MEMORIES[absIndex].created_at || null;
     MEMORIES[absIndex].connect_to = row.connect_to ?? null;
     MEMORIES[absIndex].connectTo = resolveRemoteConnectionTarget(row.connect_to, extraIndexMap);
   });
