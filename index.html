@@ -734,7 +734,7 @@ function generateStarPositions(data) {
 
 const MEMORIES = generateStarPositions(MEMORIES_DATA);
 
-const SUPABASE_URL = 'https://hlohijsctkfdiyrgmuqp.supabase.co';
+const SUPABASE_URL = 'https://hlohijjsctkfdiyrgmuqp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsb2hpanNjdGtmZGl5cmdtdXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNzE5OTYsImV4cCI6MjA4OTk0Nzk5Nn0.18_gY5ohSwQTRx0-HKdEhe9dvkPzl3SXANLv-EiTwDo';
 const SUPABASE_TABLE = 'memories';
 let supabaseClient = null;
@@ -1005,13 +1005,16 @@ let scene,camera,renderer,raycaster,mouse;
 let hitboxes=[],sprites={},rings={};
 let isMouseDown=false,isDragging=false,prevM={x:0,y:0},rotV={x:0,y:0};
 let modalOpen=false;
+let openModalIdx = null;
 let lastTouchTime = 0;
 let modalOpenedAt = 0;
 let newStarAnimations = [];
+let starRemovalAnimations = [];
 let supernovaBursts = [];   // phase 2: spiky burst rays
 let supernovaBloom  = [];   // phase 1: expanding soft light blob
 let burstTexture = null;
 let bloomTexture = null;
+const removingRowIds = new Set();
 
 // Spiky burst texture (existing)
 function makeSupernovaCanvas(){
@@ -1214,7 +1217,7 @@ function queueNewStarReveal(idx){
   bloom.scale.set(0.1, 0.1, 1);
   bloom.renderOrder = 7;
   scene.add(bloom);
-  supernovaBloom.push({ sprite: bloom, idx, start: now, duration: 1800 });
+  supernovaBloom.push({ sprite: bloom, idx, start: now, duration: 1800, maxScale: 7.2, opacityMul: 0.98 });
 
   // ── Phase 2: Spiky burst (starts at 400ms, 400–1800ms) ───────────────────
   setTimeout(() => {
@@ -1229,13 +1232,157 @@ function queueNewStarReveal(idx){
     burst.scale.set(0.15, 0.15, 1);
     burst.renderOrder = 8;
     scene.add(burst);
-    supernovaBursts.push({ sprite: burst, idx, start: performance.now(), duration: 1400 });
+    supernovaBursts.push({ sprite: burst, idx, start: performance.now(), duration: 1400, maxScale: 4.8, opacityMul: 1.0 });
   }, 400);
 
   // ── Phase 3: Star fades in (starts at 1100ms) ────────────────────────────
   setTimeout(() => {
     newStarAnimations.push({ idx, start: performance.now(), duration: 1200 });
   }, 1100);
+}
+
+function findMemoryIndexByRowId(rowId){
+  const key = String(rowId);
+  for(let i = MEMORIES_DATA.length; i < MEMORIES.length; i++){
+    const rowKey = MEMORIES[i] && MEMORIES[i].rowId != null ? String(MEMORIES[i].rowId) : null;
+    if(rowKey === key) return i;
+  }
+  return -1;
+}
+
+function queueStarDeletionByRowId(rowId){
+  if (rowId === undefined || rowId === null) return;
+  const key = String(rowId);
+  if (removingRowIds.has(key)) return;
+
+  const idx = findMemoryIndexByRowId(rowId);
+  if (idx < 0) return;
+
+  const sp = sprites[idx], rg = rings[idx];
+  if (!sp || !rg) return;
+
+  removingRowIds.add(key);
+  sp.userData.removing = true;
+  rg.userData.removing = true;
+
+  const pos = sp.position.clone();
+  const now = performance.now();
+
+  const bloom = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: getBloomTexture(),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0
+  }));
+  bloom.position.copy(pos);
+  bloom.scale.set(0.12, 0.12, 1);
+  bloom.renderOrder = 7;
+  scene.add(bloom);
+  supernovaBloom.push({ sprite: bloom, idx, rowId, start: now, duration: 1500, maxScale: 8.8, opacityMul: 1.0 });
+
+  setTimeout(() => {
+    const liveIdx = findMemoryIndexByRowId(rowId);
+    const liveSp = liveIdx >= 0 ? sprites[liveIdx] : null;
+    const burst = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: getSupernovaTexture(),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      opacity: 0
+    }));
+    if (liveSp) burst.position.copy(liveSp.position);
+    else burst.position.copy(pos);
+    burst.scale.set(0.2, 0.2, 1);
+    burst.renderOrder = 8;
+    scene.add(burst);
+    supernovaBursts.push({ sprite: burst, idx: liveIdx >= 0 ? liveIdx : idx, rowId, start: performance.now(), duration: 1200, maxScale: 5.8, opacityMul: 1.05 });
+  }, 140);
+
+  starRemovalAnimations.push({ rowId, start: now + 80, duration: 760 });
+  setTimeout(() => finalizeStarRemovalByRowId(rowId), 980);
+}
+
+function finalizeStarRemovalByRowId(rowId){
+  const key = String(rowId);
+  const idx = findMemoryIndexByRowId(rowId);
+  removingRowIds.delete(key);
+  if (idx < 0) return;
+
+  if (modalOpen && openModalIdx === idx) closeModal();
+
+  const sp = sprites[idx];
+  const rg = rings[idx];
+  if (sp) scene.remove(sp);
+  if (rg) scene.remove(rg);
+
+  hitboxes = hitboxes.filter(hb => {
+    if (hb.userData.idx === idx) {
+      scene.remove(hb);
+      hb.geometry?.dispose?.();
+      hb.material?.dispose?.();
+      return false;
+    }
+    return true;
+  });
+
+  if (sp) {
+    sp.material?.map?.dispose?.();
+    sp.material?.dispose?.();
+  }
+  if (rg) {
+    rg.material?.map?.dispose?.();
+    rg.material?.dispose?.();
+  }
+
+  MEMORIES.splice(idx, 1);
+
+  const shiftedSprites = {};
+  Object.keys(sprites).map(Number).sort((a,b)=>a-b).forEach(oldIdx => {
+    if (oldIdx === idx) return;
+    const nextIdx = oldIdx > idx ? oldIdx - 1 : oldIdx;
+    shiftedSprites[nextIdx] = sprites[oldIdx];
+    if (shiftedSprites[nextIdx]) shiftedSprites[nextIdx].userData.idx = nextIdx;
+  });
+  sprites = shiftedSprites;
+
+  const shiftedRings = {};
+  Object.keys(rings).map(Number).sort((a,b)=>a-b).forEach(oldIdx => {
+    if (oldIdx === idx) return;
+    const nextIdx = oldIdx > idx ? oldIdx - 1 : oldIdx;
+    shiftedRings[nextIdx] = rings[oldIdx];
+    if (shiftedRings[nextIdx]) shiftedRings[nextIdx].userData.idx = nextIdx;
+  });
+  rings = shiftedRings;
+
+  hitboxes.forEach(hb => {
+    if (hb.userData.idx > idx) hb.userData.idx -= 1;
+  });
+
+  const nextVisited = new Set();
+  visited.forEach(v => {
+    if (v === idx) return;
+    nextVisited.add(v > idx ? v - 1 : v);
+  });
+  visited.clear();
+  nextVisited.forEach(v => visited.add(v));
+
+  for (let i = discoveryOrder.length - 1; i >= 0; i--) {
+    if (discoveryOrder[i] === idx) discoveryOrder.splice(i, 1);
+    else if (discoveryOrder[i] > idx) discoveryOrder[i] -= 1;
+  }
+
+  if (openModalIdx !== null) {
+    if (openModalIdx === idx) openModalIdx = null;
+    else if (openModalIdx > idx) openModalIdx -= 1;
+  }
+  if (tooltipIdx === idx) hideTooltip();
+  else if (tooltipIdx > idx) tooltipIdx -= 1;
+
+  buildStarLabels();
+  applyConnectionsAndCluster();
+  buildConstellationLines();
+  updateMemoryCounterUI();
 }
 
 function updateNewStarAnimations(now){
@@ -1258,17 +1405,42 @@ function updateNewStarAnimations(now){
     }
   }
 
+  for(let i = starRemovalAnimations.length - 1; i >= 0; i--){
+    const a = starRemovalAnimations[i];
+    const idx = findMemoryIndexByRowId(a.rowId);
+    if(idx < 0){
+      starRemovalAnimations.splice(i,1);
+      continue;
+    }
+    const sp = sprites[idx], rg = rings[idx];
+    if(!sp || !rg){
+      starRemovalAnimations.splice(i,1);
+      continue;
+    }
+    const p = Math.min(1, Math.max(0, (now - a.start) / a.duration));
+    const fade = Math.pow(1 - p, 1.45);
+    sp.userData.reveal = fade;
+    rg.userData.reveal = fade;
+    sp.material.opacity = fade;
+    rg.material.opacity = fade * 0.92;
+    if(p >= 1){
+      sp.material.opacity = 0;
+      rg.material.opacity = 0;
+      starRemovalAnimations.splice(i,1);
+    }
+  }
+
   for(let i = supernovaBursts.length - 1; i >= 0; i--){
     const b = supernovaBursts[i];
     const p = Math.min(1, (now - b.start) / b.duration);
     const easeOut = 1 - Math.pow(1 - p, 3);
-    // Fast expansion then slow drift, fades out quadratically
-    const scale = 0.15 + easeOut * 2.8;
+    const scale = 0.18 + easeOut * (b.maxScale ?? 4.8);
     const fade  = Math.pow(1 - p, 2);
-    const sp = sprites[b.idx];
+    const liveIdx = b.rowId != null ? findMemoryIndexByRowId(b.rowId) : b.idx;
+    const sp = liveIdx >= 0 ? sprites[liveIdx] : sprites[b.idx];
     if(sp) b.sprite.position.copy(sp.position);
     b.sprite.scale.set(scale, scale, 1);
-    b.sprite.material.opacity = fade * 0.92;
+    b.sprite.material.opacity = fade * (b.opacityMul ?? 0.92);
     if(p >= 1){
       scene.remove(b.sprite); b.sprite.material.dispose();
       supernovaBursts.splice(i,1);
@@ -1279,26 +1451,25 @@ function updateNewStarAnimations(now){
   for(let i = supernovaBloom.length - 1; i >= 0; i--){
     const b = supernovaBloom[i];
     const p = Math.min(1, (now - b.start) / b.duration);
-    const sp = sprites[b.idx];
+    const liveIdx = b.rowId != null ? findMemoryIndexByRowId(b.rowId) : b.idx;
+    const sp = liveIdx >= 0 ? sprites[liveIdx] : sprites[b.idx];
     if(sp) b.sprite.position.copy(sp.position);
 
-    // Light curve: sharp attack (0–5%), shoulder hold (5–20%), long decay
     let opacity;
     if(p < 0.05){
-      opacity = p / 0.05;                                  // instant flash up
+      opacity = p / 0.05;
     } else if(p < 0.20){
-      opacity = 1.0;                                       // hold at peak
+      opacity = 1.0;
     } else {
       const dp = (p - 0.20) / 0.80;
-      opacity = Math.pow(1 - dp, 1.6);                    // warm exponential decay
+      opacity = Math.pow(1 - dp, 1.6);
     }
 
-    // Scale: starts tiny, expands rapidly then slows (light spreading outward)
     const expandEase = 1 - Math.pow(1 - Math.min(p / 0.35, 1), 2);
-    const scale = 0.05 + expandEase * 5.5;
+    const scale = 0.06 + expandEase * (b.maxScale ?? 5.5);
 
     b.sprite.scale.set(scale, scale, 1);
-    b.sprite.material.opacity = opacity * 0.88;
+    b.sprite.material.opacity = opacity * (b.opacityMul ?? 0.88);
 
     if(p >= 1){
       scene.remove(b.sprite); b.sprite.material.dispose();
@@ -1350,14 +1521,19 @@ function setVolume(v){
 // ─── CURSOR GLOW ─────────────────────────────────────────────────────────────
 const cursorGlow = document.getElementById('cursor-glow');
 let cursorX = 0, cursorY = 0;
+const hasCoarsePointer = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
-document.addEventListener('mousemove', e => {
-  cursorX = e.clientX; cursorY = e.clientY;
-  cursorGlow.style.left = cursorX + 'px';
-  cursorGlow.style.top  = cursorY + 'px';
-  cursorGlow.classList.add('active');
-});
-document.addEventListener('mouseleave', () => cursorGlow.classList.remove('active'));
+if (hasCoarsePointer) {
+  cursorGlow.style.display = 'none';
+} else {
+  document.addEventListener('mousemove', e => {
+    cursorX = e.clientX; cursorY = e.clientY;
+    cursorGlow.style.left = cursorX + 'px';
+    cursorGlow.style.top  = cursorY + 'px';
+    cursorGlow.classList.add('active');
+  });
+  document.addEventListener('mouseleave', () => cursorGlow.classList.remove('active'));
+}
 // over-star class toggled in onHoverMove
 
 // ─── FINALE ───────────────────────────────────────────────────────────────────
@@ -1767,8 +1943,8 @@ function updateConstellationAlpha(t) {
 }
 
 // ─── STAR TRAIL SYSTEM ───────────────────────────────────────────────────────
-const TRAIL_HISTORY = 28;
-const rotHistory = [];
+const TRAIL_HISTORY = 20;
+const sceneQuatHistory = [];
 let trailLines = null;
 
 function initTrailLines(){
@@ -1791,19 +1967,15 @@ function initTrailLines(){
 }
 
 function updateStarTrails(){
-  // Combined velocity: drag rotV or hint pan velocity
   const vx = rotV.x + hintTrailVel.x;
   const vy = rotV.y + hintTrailVel.y;
   const vel = Math.sqrt(vx*vx + vy*vy);
 
-  // Store rotation DELTAS (how much scene moved this frame)
-  // Trail positions are expressed as offsets from current scene rotation,
-  // staying in scene-local space so they automatically match the background stars.
-  rotHistory.push({dx: vy, dy: vx});
-  if(rotHistory.length > TRAIL_HISTORY) rotHistory.shift();
-  const histLen = rotHistory.length;
+  sceneQuatHistory.push(scene.quaternion.clone());
+  if(sceneQuatHistory.length > TRAIL_HISTORY) sceneQuatHistory.shift();
+  const histLen = sceneQuatHistory.length;
 
-  if(!trailLines || histLen < 2 || vel < 0.0004){
+  if(!trailLines || histLen < 2 || vel < 0.00022){
     if(trailLines) trailLines.visible = false;
     return;
   }
@@ -1815,21 +1987,18 @@ function updateStarTrails(){
   const SEGS     = TRAIL_HISTORY - 1;
   const outPos   = trailLines.geometry.attributes.position.array;
   const outCol   = trailLines.geometry.attributes.color.array;
-  const activeSegs = Math.min(SEGS, Math.max(1, Math.ceil(vel * 2800)));
-  const trailAlpha = Math.min(0.85, vel * 350);
+  const activeSegs = Math.min(SEGS, Math.max(2, Math.ceil(vel * 2100)));
+  const trailAlpha = Math.min(0.92, vel * 420);
 
-  // Precompute cumulative rotation offsets going backward in time
-  // offsets[0] = current (0,0), offsets[1] = 1 frame ago, etc.
-  const offsets = [{rx:0,ry:0}];
-  for(let i=1; i<=activeSegs && i<histLen; i++){
-    const prev = offsets[i-1];
-    const delta = rotHistory[rotHistory.length - i];
-    offsets.push({ rx: prev.rx - delta.dy, ry: prev.ry - delta.dx });
+  const currentQ = scene.quaternion;
+  const invCurrent = currentQ.clone().invert();
+  const relQuats = [new THREE.Quaternion()];
+  relQuats[0].identity();
+  for(let i = 1; i <= activeSegs && i < histLen; i++){
+    relQuats[i] = invCurrent.clone().multiply(sceneQuatHistory[histLen - 1 - i]);
   }
 
-  const mxA = new THREE.Matrix4();
-  const mxB = new THREE.Matrix4();
-  const v   = new THREE.Vector3();
+  const v = new THREE.Vector3();
 
   for(let s = 0; s < COUNT; s++){
     const sx = starPos[s*3], sy = starPos[s*3+1], sz = starPos[s*3+2];
@@ -1838,7 +2007,7 @@ function updateStarTrails(){
     for(let seg = 0; seg < SEGS; seg++){
       const vBase = (s * SEGS + seg) * 6;
 
-      if(seg >= activeSegs || seg+1 >= offsets.length){
+      if(seg >= activeSegs || seg+1 >= relQuats.length){
         outPos[vBase]=outPos[vBase+1]=outPos[vBase+2]=0;
         outPos[vBase+3]=outPos[vBase+4]=outPos[vBase+5]=0;
         outCol[vBase]=outCol[vBase+1]=outCol[vBase+2]=0;
@@ -1846,19 +2015,12 @@ function updateStarTrails(){
         continue;
       }
 
-      // Newer end of segment (closer to current frame)
-      const offB = offsets[seg];
-      mxA.makeRotationX(offB.rx).multiply(mxB.makeRotationY(offB.ry));
-      v.set(sx,sy,sz).applyMatrix4(mxA);
-      outPos[vBase+3]=v.x; outPos[vBase+4]=v.y; outPos[vBase+5]=v.z;
-
-      // Older end of segment
-      const offA = offsets[seg+1];
-      mxA.makeRotationX(offA.rx).multiply(mxB.makeRotationY(offA.ry));
-      v.set(sx,sy,sz).applyMatrix4(mxA);
+      v.set(sx,sy,sz).applyQuaternion(relQuats[seg+1]);
       outPos[vBase]=v.x; outPos[vBase+1]=v.y; outPos[vBase+2]=v.z;
 
-      // Colour: bright at current end, fades to transparent at tail
+      v.set(sx,sy,sz).applyQuaternion(relQuats[seg]);
+      outPos[vBase+3]=v.x; outPos[vBase+4]=v.y; outPos[vBase+5]=v.z;
+
       const tB = (1 - seg / activeSegs) * trailAlpha;
       const tA = (1 - (seg+1) / activeSegs) * trailAlpha;
       outCol[vBase]=cr*tA;   outCol[vBase+1]=cg*tA;   outCol[vBase+2]=cb*tA;
@@ -2125,11 +2287,11 @@ function onHoverMove(e){
     tooltip.style.left = e.clientX + 'px';
     tooltip.style.top  = (e.clientY - 4) + 'px';
     renderer.domElement.style.cursor = 'pointer';
-    cursorGlow.classList.add('over-star');
+    if (!hasCoarsePointer) cursorGlow.classList.add('over-star');
   } else {
     hideTooltip();
     renderer.domElement.style.cursor = '';
-    cursorGlow.classList.remove('over-star');
+    if (!hasCoarsePointer) cursorGlow.classList.remove('over-star');
   }
 }
 
@@ -2241,7 +2403,7 @@ function buildJournalList(){
 
 // ─── MODAL ───────────────────────────────────────────────────────────────────
 function openModal(idx){
-  const m=MEMORIES[idx]; modalOpen=true;
+  const m=MEMORIES[idx]; modalOpen=true; openModalIdx = idx;
   modalOpenedAt = Date.now();
   if(navigator.vibrate) navigator.vibrate(18);
   if(!visited.has(idx)) discoveryOrder.push(idx);
@@ -2259,6 +2421,7 @@ function openModal(idx){
 }
 function closeModal(){
   modalOpen=false;
+  openModalIdx = null;
   document.getElementById('modal-wrap').classList.remove('open');
 }
 
@@ -2281,6 +2444,50 @@ function startLivePolling() {
   _livePollingInterval = setInterval(() => {
     if (!document.hidden) refreshRemoteMemories(true);
   }, 10000);
+}
+
+let _supabaseLiveChannel = null;
+const crossTabMemoryChannel = 'dolcetta-memory-live';
+
+function startSupabaseRealtime(){
+  if (_supabaseLiveChannel) return;
+  try {
+    const client = getSupabaseClient();
+    _supabaseLiveChannel = client
+      .channel('dolcetta-memories-live')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: SUPABASE_TABLE }, () => {
+        refreshRemoteMemories(true);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: SUPABASE_TABLE }, () => {
+        refreshRemoteMemories(true);
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: SUPABASE_TABLE }, payload => {
+        const deletedId = payload?.old?.id;
+        if (deletedId !== undefined && deletedId !== null) {
+          _pendingExtra = (_pendingExtra || []).filter(row => String(row.id) !== String(deletedId));
+          queueStarDeletionByRowId(deletedId);
+          setTimeout(() => refreshRemoteMemories(true), 1100);
+        }
+      })
+      .subscribe();
+  } catch (err) {
+    console.warn('Supabase realtime unavailable:', err);
+  }
+}
+
+function startCrossTabMemorySync(){
+  if (!('BroadcastChannel' in window)) return;
+  const bc = new BroadcastChannel(crossTabMemoryChannel);
+  bc.addEventListener('message', event => {
+    const msg = event.data || {};
+    if (msg.type === 'memory-deleted' && msg.id != null) {
+      _pendingExtra = (_pendingExtra || []).filter(row => String(row.id) !== String(msg.id));
+      queueStarDeletionByRowId(msg.id);
+      setTimeout(() => refreshRemoteMemories(true), 1100);
+    } else if (msg.type === 'memory-added' || msg.type === 'memory-updated') {
+      refreshRemoteMemories(true);
+    }
+  });
 }
 
 // ─── BOOT ────────────────────────────────────────────────────────────────────
@@ -2313,9 +2520,24 @@ async function refreshRemoteMemories(rebuildIfReady = true) {
 
   let extraOk = false;
   let connsOk = true;
+  let removedRowIds = [];
 
   try {
-    _pendingExtra = await fetchSupabaseMemories();
+    const fetchedExtra = await fetchSupabaseMemories();
+    const loadedRemoteIds = new Set(
+      MEMORIES.slice(MEMORIES_DATA.length)
+        .map(m => m && (m.rowId ?? m.id))
+        .filter(v => v !== null && v !== undefined)
+        .map(v => String(v))
+    );
+    const fetchedIds = new Set(fetchedExtra
+      .map(row => row && row.id)
+      .filter(v => v !== null && v !== undefined)
+      .map(v => String(v))
+    );
+    removedRowIds = [...loadedRemoteIds].filter(id => !fetchedIds.has(id));
+
+    _pendingExtra = fetchedExtra;
     _pendingBuiltinConns = {};
     extraOk = true;
 
@@ -2328,9 +2550,11 @@ async function refreshRemoteMemories(rebuildIfReady = true) {
     if (window._dbg) window._dbg('log', { level: 'err', text: 'Supabase refresh failed: ' + (err.message || err) });
   }
 
+  removedRowIds.forEach(id => queueStarDeletionByRowId(id));
+
   const newExtraSig = JSON.stringify(_pendingExtra);
   const newConnSig  = JSON.stringify(_pendingBuiltinConns);
-  const changed = newExtraSig !== prevExtraSig || newConnSig !== prevConnSig;
+  const changed = newExtraSig !== prevExtraSig || newConnSig !== prevConnSig || removedRowIds.length > 0;
 
   if (window._dbg) window._dbg('poll_done', {
     ms: Math.round(performance.now() - t0),
@@ -2340,13 +2564,15 @@ async function refreshRemoteMemories(rebuildIfReady = true) {
     conns:  Object.keys(_pendingBuiltinConns).length
   });
 
-  if (changed && typeof scene !== 'undefined' && scene && rebuildIfReady) {
+  if (changed && typeof scene !== 'undefined' && scene && rebuildIfReady && removedRowIds.length === 0 && removingRowIds.size === 0) {
     applyConnectionsAndCluster();
     updateMemoryCounterUI();
   }
 }
 
 refreshRemoteMemories(false);
+startSupabaseRealtime();
+startCrossTabMemorySync();
 window.addEventListener('focus', () => { refreshRemoteMemories(true); });
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) refreshRemoteMemories(true);
@@ -2854,7 +3080,7 @@ function applyConnectionsAndCluster() {
         <span class="dbg-val" id="dbg-mem-builtin">—</span>
       </div>
       <div class="dbg-row">
-        <span class="dbg-label">added (github)</span>
+        <span class="dbg-label">added (supabase)</span>
         <span class="dbg-val" id="dbg-mem-extra">—</span>
       </div>
       <div class="dbg-row">
