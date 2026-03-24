@@ -9,73 +9,107 @@
 html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; color:#fde8eb; }
 .centered { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#00010f; }
 .auth-box {
-text-align:center; max-width:340px; width:92%; padding:2rem;
-background:#1a0308; border:1px solid #c0324a; border-radius:16px;
+  text-align:center; max-width:340px; width:92%; padding:2rem;
+  background:#1a0308; border:1px solid #c0324a; border-radius:16px;
 }
 .auth-box h2 { font-size:14px; color:#fff0f2; margin-bottom:.4rem; letter-spacing:2px; font-weight:400; font-family:monospace; text-transform:uppercase; }
 .auth-box p { font-size:11px; color:rgba(245,160,174,.4); margin-bottom:1.5rem; font-family:monospace; line-height:1.7; }
 .auth-box input {
-width:100%; padding:11px 14px; background:rgba(255,255,255,.05);
-border:1px solid rgba(232,82,106,.35); border-radius:8px; color:#fde8eb;
-font-size:13px; outline:none; margin-bottom:.8rem; font-family:monospace; text-align:center;
+  width:100%; padding:11px 14px; background:rgba(255,255,255,.05);
+  border:1px solid rgba(232,82,106,.35); border-radius:8px; color:#fde8eb;
+  font-size:13px; outline:none; margin-bottom:.8rem; font-family:monospace; text-align:center;
 }
 .auth-box input:focus { border-color:#e8526a; }
 .auth-box .main-btn {
-width:100%; padding:11px; background:transparent; border:1px solid #e8526a;
-color:#e8526a; border-radius:30px; font-size:12px; letter-spacing:2px;
-font-family:monospace; cursor:pointer; transition:all .3s; margin-top:.3rem;
+  width:100%; padding:11px; background:transparent; border:1px solid #e8526a;
+  color:#e8526a; border-radius:30px; font-size:12px; letter-spacing:2px;
+  font-family:monospace; cursor:pointer; transition:all .3s; margin-top:.3rem;
 }
 .auth-box .main-btn:hover { background:#e8526a; color:#150003; }
 .err-msg { font-size:11px; color:#e8526a; margin-top:.7rem; min-height:1rem; font-family:monospace; }
 .ok-msg { font-size:11px; color:#5dcaa5; margin-top:.7rem; min-height:1rem; font-family:monospace; }
-#admin-ui { max-width:640px; margin:0 auto; padding:2rem 1.5rem 5rem; }
+
+#admin-ui { max-width:760px; margin:0 auto; padding:2rem 1.5rem 5rem; }
 .admin-header {
-display:flex; align-items:center; justify-content:space-between;
-margin-bottom:2rem; padding-bottom:1rem; border-bottom:1px solid rgba(192,50,74,.3);
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:1.2rem; padding-bottom:1rem; border-bottom:1px solid rgba(192,50,74,.3);
 }
 .admin-header h1 { font-size:14px; color:#fff0f2; font-weight:400; letter-spacing:3px; text-transform:uppercase; font-family:monospace; }
-#builtin-connections-form { margin: 1.5rem 0 2rem; padding: 1.2rem 1.4rem; background: rgba(232,130,145,.06); border: 1px solid rgba(232,130,145,.15); border-radius: 10px; }
-#builtin-connections-form h3 { font-size: 13px; color: rgba(232,130,145,.9); margin: 0 0 .8rem; letter-spacing: 1px; font-weight: 600; }
-.conn-row { display: flex; align-items: center; gap: .6rem; margin-bottom: .55rem; }
-.conn-row .conn-name { font-size: 11px; color: rgba(245,200,210,.75); font-family: monospace; width: 180px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.conn-row select { flex: 1; background: rgba(10,4,18,.7); color: rgba(245,200,210,.9); border: 1px solid rgba(232,130,145,.2); border-radius: 6px; padding: .3rem .5rem; font-size: 11px; font-family: monospace; }
-#save-conn-btn { margin-top: .8rem; background: rgba(232,130,145,.15); color: #e88295; border: 1px solid rgba(232,130,145,.3); border-radius: 8px; padding: .5rem 1.2rem; font-size: 12px; letter-spacing: 1px; cursor: pointer; font-family: monospace; }
-#save-conn-btn:hover { background: rgba(232,130,145,.25); }
-#conn-status { font-size: 11px; font-family: monospace; margin-top: .5rem; color: rgba(245,200,210,.5); }
+.hdr-links { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .hdr-links a, .hdr-links button { font-size:11px; color:rgba(232,82,106,.55); font-family:monospace; text-decoration:none; letter-spacing:1px; background:none; border:none; cursor:pointer; }
 .hdr-links a:hover, .hdr-links button:hover { color:#e8526a; }
+
+.tabs {
+  display:flex; gap:8px; margin-bottom:1.3rem; flex-wrap:wrap;
+}
+.tab-btn {
+  background:rgba(25,3,8,.7); border:1px solid rgba(232,82,106,.35); color:rgba(245,160,174,.6);
+  padding:9px 16px; border-radius:999px; cursor:pointer; font-family:monospace; font-size:11px; letter-spacing:1.5px;
+  transition:all .2s;
+}
+.tab-btn:hover { border-color:#e8526a; color:#e8526a; }
+.tab-btn.active { background:rgba(232,82,106,.14); border-color:#e8526a; color:#fff0f2; }
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+
 .sec-title { font-size:10px; color:rgba(232,82,106,.55); letter-spacing:2px; text-transform:uppercase; font-family:monospace; margin-bottom:1rem; }
-#memory-list { display:flex; flex-direction:column; gap:7px; margin-bottom:2.5rem; }
-.mc { background:#1a0308; border:1px solid rgba(192,50,74,.22); border-radius:10px; padding:.8rem 1rem; display:flex; align-items:flex-start; justify-content:space-between; gap:.8rem; }
+.panel-card {
+  background:#1a0308; border:1px solid rgba(192,50,74,.22); border-radius:14px; padding:1.3rem;
+}
+#memory-list { display:flex; flex-direction:column; gap:8px; }
+.mc { background:#120208; border:1px solid rgba(192,50,74,.22); border-radius:10px; padding:.9rem 1rem; display:flex; align-items:flex-start; justify-content:space-between; gap:.8rem; }
 .mc.builtin { opacity:.38; }
 .mc-info { flex:1; min-width:0; }
 .mc-name { font-size:13px; color:#fff0f2; margin-bottom:.2rem; }
 .mc-prev { font-size:11px; color:rgba(245,160,174,.45); font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.mc-right { display:flex; align-items:center; gap:5px; flex-shrink:0; }
+.mc-right { display:flex; align-items:center; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; }
 .tag { font-size:9px; font-family:monospace; letter-spacing:1px; padding:2px 7px; border-radius:10px; white-space:nowrap; }
 .tag-bi { background:rgba(232,82,106,.1); color:rgba(232,82,106,.4); }
 .tag-add { background:rgba(255,215,80,.14); color:#f0c060; }
 .tag-img { background:rgba(93,202,165,.14); color:#5dcaa5; }
-.del-btn { background:none; border:none; color:rgba(232,82,106,.3); font-size:16px; cursor:pointer; padding:0 2px; line-height:1; transition:color .2s; }
-.del-btn:hover { color:#e8526a; }
+.mini-btn {
+  background:none; border:1px solid rgba(232,82,106,.28); color:rgba(245,160,174,.7);
+  font-size:10px; cursor:pointer; padding:5px 10px; line-height:1; border-radius:999px;
+  font-family:monospace; letter-spacing:1px; transition:all .2s;
+}
+.mini-btn:hover { border-color:#e8526a; color:#e8526a; }
+.del-btn { border-color:rgba(232,82,106,.2); color:rgba(232,82,106,.5); }
+.del-btn:hover { color:#fff0f2; background:rgba(232,82,106,.14); }
+
+#builtin-connections-form { background:#1a0308; border:1px solid rgba(192,50,74,.22); border-radius:14px; padding:1.3rem; }
+#builtin-connections-form h3 { font-size:13px; color:rgba(232,130,145,.9); margin:0 0 .8rem; letter-spacing:1px; font-weight:600; }
+.conn-row { display:flex; align-items:center; gap:.6rem; margin-bottom:.55rem; }
+.conn-row .conn-name { font-size:11px; color:rgba(245,200,210,.75); font-family:monospace; width:180px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.conn-row select { flex:1; background:rgba(10,4,18,.7); color:rgba(245,200,210,.9); border:1px solid rgba(232,130,145,.2); border-radius:6px; padding:.3rem .5rem; font-size:11px; font-family:monospace; }
+#save-conn-btn {
+  margin-top:.8rem; background:rgba(232,130,145,.15); color:#e88295; border:1px solid rgba(232,130,145,.3);
+  border-radius:8px; padding:.6rem 1.2rem; font-size:12px; letter-spacing:1px; cursor:pointer; font-family:monospace;
+}
+#save-conn-btn:hover { background:rgba(232,130,145,.25); }
+#conn-status { font-size:11px; font-family:monospace; margin-top:.5rem; color:rgba(245,200,210,.5); }
+
 #add-form { background:#1a0308; border:1px solid rgba(192,50,74,.38); border-radius:14px; padding:1.5rem; }
-#add-form h3 { font-size:11px; color:#fff0f2; font-weight:400; letter-spacing:2px; margin-bottom:1.3rem; text-transform:uppercase; font-family:monospace; }
+#add-form h3 { font-size:11px; color:#fff0f2; font-weight:400; letter-spacing:2px; margin-bottom:1rem; text-transform:uppercase; font-family:monospace; }
+#form-mode {
+  margin-bottom:1rem; font-size:11px; color:rgba(245,160,174,.55); font-family:monospace; letter-spacing:1px;
+}
 .field { margin-bottom:1.1rem; }
 .field label { display:block; font-size:10px; color:rgba(232,82,106,.65); letter-spacing:1.5px; text-transform:uppercase; font-family:monospace; margin-bottom:.4rem; }
 .field input[type="text"], .field textarea, .field select {
-width:100%; padding:10px 12px; background:rgba(255,255,255,.04);
-border:1px solid rgba(232,82,106,.28); border-radius:8px; color:#fde8eb;
-font-size:14px; font-family:'Georgia',serif; outline:none; resize:vertical; transition:border-color .2s;
+  width:100%; padding:10px 12px; background:rgba(255,255,255,.04);
+  border:1px solid rgba(232,82,106,.28); border-radius:8px; color:#fde8eb;
+  font-size:14px; font-family:'Georgia',serif; outline:none; resize:vertical; transition:border-color .2s;
 }
 .field select { font-family:monospace; font-size:12px; cursor:pointer; }
 .field select option { background:#1a0308; }
 .field input[type="text"]:focus, .field textarea:focus, .field select:focus { border-color:#e8526a; }
 .field textarea { min-height:85px; line-height:1.65; }
 .field-hint { font-size:10px; color:rgba(245,160,174,.3); font-family:monospace; margin-top:.35rem; line-height:1.5; }
+
 .photo-drop {
-border:1px dashed rgba(232,82,106,.32); border-radius:10px; padding:1.1rem;
-text-align:center; cursor:pointer; transition:border-color .2s, background .2s;
-position:relative; min-height:65px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:.3rem;
+  border:1px dashed rgba(232,82,106,.32); border-radius:10px; padding:1.1rem;
+  text-align:center; cursor:pointer; transition:border-color .2s, background .2s;
+  position:relative; min-height:65px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:.3rem;
 }
 .photo-drop:hover, .photo-drop.dragover { border-color:#e8526a; background:rgba(232,82,106,.05); }
 .photo-drop input[type="file"] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
@@ -84,19 +118,37 @@ position:relative; min-height:65px; display:flex; align-items:center; justify-co
 #photo-preview { max-width:100%; max-height:150px; border-radius:8px; margin-top:.7rem; display:none; object-fit:cover; }
 .rm-photo { font-size:10px; color:rgba(232,82,106,.45); background:none; border:none; cursor:pointer; font-family:monospace; display:none; margin-top:.3rem; }
 .rm-photo:hover { color:#e8526a; }
+
 .size-opts { display:flex; gap:8px; }
 .sz { flex:1; padding:7px; text-align:center; border:1px solid rgba(232,82,106,.28); border-radius:8px; cursor:pointer; font-family:monospace; font-size:11px; color:rgba(245,160,174,.5); transition:all .2s; }
 .sz.sel, .sz:hover { border-color:#e8526a; color:#e8526a; background:rgba(232,82,106,.07); }
-#save-btn { width:100%; padding:13px; margin-top:1.2rem; background:transparent; border:1px solid #e8526a; color:#e8526a; border-radius:30px; font-size:13px; letter-spacing:2px; font-family:monospace; cursor:pointer; transition:all .3s; }
-#save-btn:hover:not(:disabled) { background:#e8526a; color:#150003; }
+
+.form-actions { display:flex; gap:10px; margin-top:1.2rem; }
+#save-btn, #cancel-edit-btn {
+  flex:1; padding:13px; background:transparent; border:1px solid #e8526a; color:#e8526a; border-radius:30px;
+  font-size:13px; letter-spacing:2px; font-family:monospace; cursor:pointer; transition:all .3s;
+}
+#save-btn:hover:not(:disabled), #cancel-edit-btn:hover { background:#e8526a; color:#150003; }
 #save-btn:disabled { opacity:.4; cursor:not-allowed; }
+#cancel-edit-btn { display:none; border-color:rgba(245,160,174,.3); color:rgba(245,160,174,.7); }
+#cancel-edit-btn:hover { background:rgba(245,160,174,.14); color:#fff0f2; border-color:rgba(245,160,174,.6); }
+
 #status { margin-top:.9rem; font-size:12px; font-family:monospace; text-align:center; min-height:1.2rem; letter-spacing:1px; }
 #status.ok { color:#5dcaa5; } #status.err { color:#e8526a; } #status.work { color:rgba(245,160,174,.5); }
+
+@media (max-width:640px){
+  #admin-ui { padding:1.3rem 1rem 4rem; }
+  .admin-header { align-items:flex-start; gap:1rem; flex-direction:column; }
+  .conn-row { flex-direction:column; align-items:stretch; }
+  .conn-row .conn-name { width:auto; }
+  .mc { flex-direction:column; }
+  .mc-right { width:100%; justify-content:flex-start; }
+  .form-actions { flex-direction:column; }
+}
 </style>
 </head>
 <body>
 
-<!-- PASSWORD SCREEN -->
 <div id="s-pw" class="centered">
   <div class="auth-box">
     <h2>✦ dolcetta admin</h2>
@@ -107,19 +159,6 @@ position:relative; min-height:65px; display:flex; align-items:center; justify-co
   </div>
 </div>
 
-<!-- TOKEN SETUP SCREEN -->
-<div id="s-tok" class="centered" style="display:none;">
-  <div class="auth-box">
-    <h2>first time setup</h2>
-    <p>paste your GitHub token.<br>it gets encrypted with your password<br>and saved only in this browser.<br>never stored in any file.</p>
-    <input type="text" id="tok-in" placeholder="ghp_..." style="letter-spacing:1px;font-size:12px;">
-    <button class="main-btn" onclick="saveTok()">encrypt & save</button>
-    <div class="err-msg" id="tok-err"></div>
-    <div class="ok-msg" id="tok-ok"></div>
-  </div>
-</div>
-
-<!-- ADMIN SCREEN -->
 <div id="s-admin" style="display:none;">
   <div id="admin-ui">
     <div class="admin-header">
@@ -127,61 +166,76 @@ position:relative; min-height:65px; display:flex; align-items:center; justify-co
       <div class="hdr-links">
         <a href="./index.html" target="_blank">↗ open sky</a>
         <button onclick="lock()">lock</button>
-        <button onclick="clearTok()">clear token</button>
       </div>
     </div>
 
-    <div class="sec-title" style="display:flex;align-items:center;justify-content:space-between;">
-      <span>all memories</span>
-      <button onclick="loadMemories()" id="refresh-btn" style="background:none;border:1px solid rgba(232,82,106,.35);color:rgba(232,82,106,.6);font-family:monospace;font-size:9px;letter-spacing:1.5px;padding:3px 10px;border-radius:20px;cursor:pointer;transition:all .2s;" onmouseover="this.style.color='#e8526a';this.style.borderColor='#e8526a'" onmouseout="this.style.color='rgba(232,82,106,.6)';this.style.borderColor='rgba(232,82,106,.35)'">↻ refresh</button>
-    </div>
-    <div id="memory-list"><div style="font-size:12px;color:rgba(245,160,174,.3);font-family:monospace;padding:.5rem 0;">loading...</div></div>
-
-    <div id="builtin-connections-form">
-      <h3>✦ built-in connections</h3>
-      <div class="field-hint" style="margin-bottom:1rem;">chain built-in memories together — pick a memory and choose which one it connects to. leave blank to remove a connection.</div>
-      <div id="builtin-conn-rows"></div>
-      <button id="save-conn-btn" onclick="saveBuiltinConnections()">save connections</button>
-      <div id="conn-status"></div>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="create" onclick="openTab('create')">create</button>
+      <button class="tab-btn" data-tab="memories" onclick="openTab('memories')">memories</button>
+      <button class="tab-btn" data-tab="connections" onclick="openTab('connections')">connections</button>
+      <button onclick="loadMemories()" id="refresh-btn" class="tab-btn" style="margin-left:auto;">↻ refresh</button>
     </div>
 
-    <div id="add-form">
-      <h3>+ new memory</h3>
-      <div class="field">
-        <label>name</label>
-        <input type="text" id="f-name" placeholder="e.g. The Rooftop Night">
-      </div>
-      <div class="field">
-        <label>text</label>
-        <textarea id="f-text" placeholder="what happened, how it felt, why it matters..."></textarea>
-      </div>
-      <div class="field">
-        <label>photo <span style="opacity:.38">(optional)</span></label>
-        <div class="photo-drop" id="photo-drop">
-          <input type="file" id="f-photo" accept="image/*" onchange="handlePhoto(this)">
-          <div class="pd-text">tap to choose a photo</div>
-          <div class="pd-sub">jpg · png · webp · resized & embedded</div>
+    <div id="tab-create" class="tab-panel active">
+      <div id="add-form">
+        <h3>memory form</h3>
+        <div id="form-mode">mode: creating a new memory</div>
+        <div class="field">
+          <label>name</label>
+          <input type="text" id="f-name" placeholder="e.g. The Rooftop Night">
         </div>
-        <img id="photo-preview" alt="">
-        <button class="rm-photo" id="rm-ph-btn" onclick="removePhoto()">✕ remove photo</button>
-      </div>
-      <div class="field">
-        <label>connect to <span style="opacity:.38">(optional)</span></label>
-        <select id="f-connect">
-          <option value="">— no connection —</option>
-        </select>
-        <div class="field-hint">draws a constellation line between this star and the chosen memory.</div>
-      </div>
-      <div class="field">
-        <label>star size</label>
-        <div class="size-opts">
-          <div class="sz" onclick="selSz(1.5)" data-sz="1.5">small</div>
-          <div class="sz sel" onclick="selSz(1.8)" data-sz="1.8">medium</div>
-          <div class="sz" onclick="selSz(2.2)" data-sz="2.2">large</div>
+        <div class="field">
+          <label>text</label>
+          <textarea id="f-text" placeholder="what happened, how it felt, why it matters..."></textarea>
         </div>
+        <div class="field">
+          <label>photo <span style="opacity:.38">(optional)</span></label>
+          <div class="photo-drop" id="photo-drop">
+            <input type="file" id="f-photo" accept="image/*" onchange="handlePhoto(this)">
+            <div class="pd-text">tap to choose a photo</div>
+            <div class="pd-sub">jpg · png · webp · resized & embedded</div>
+          </div>
+          <img id="photo-preview" alt="">
+          <button class="rm-photo" id="rm-ph-btn" onclick="removePhoto()" type="button">✕ remove photo</button>
+        </div>
+        <div class="field">
+          <label>connect to <span style="opacity:.38">(optional)</span></label>
+          <select id="f-connect">
+            <option value="">— no connection —</option>
+          </select>
+          <div class="field-hint">draws a constellation line between this star and the chosen memory.</div>
+        </div>
+        <div class="field">
+          <label>star size</label>
+          <div class="size-opts">
+            <div class="sz" onclick="selSz(1.5)" data-sz="1.5">small</div>
+            <div class="sz sel" onclick="selSz(1.8)" data-sz="1.8">medium</div>
+            <div class="sz" onclick="selSz(2.2)" data-sz="2.2">large</div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button id="save-btn" onclick="saveMemory()">✦ add to the sky</button>
+          <button id="cancel-edit-btn" onclick="cancelEdit()" type="button">cancel edit</button>
+        </div>
+        <div id="status"></div>
       </div>
-      <button id="save-btn" onclick="saveMemory()">✦ add to the sky</button>
-      <div id="status"></div>
+    </div>
+
+    <div id="tab-memories" class="tab-panel">
+      <div class="panel-card">
+        <div class="sec-title">all memories</div>
+        <div id="memory-list"><div style="font-size:12px;color:rgba(245,160,174,.3);font-family:monospace;padding:.5rem 0;">loading...</div></div>
+      </div>
+    </div>
+
+    <div id="tab-connections" class="tab-panel">
+      <div id="builtin-connections-form">
+        <h3>✦ built-in connections</h3>
+        <div class="field-hint" style="margin-bottom:1rem;">chain built-in memories together — pick a memory and choose which one it connects to. leave blank to remove a connection.</div>
+        <div id="builtin-conn-rows"></div>
+        <button id="save-conn-btn" onclick="saveBuiltinConnections()">save connections</button>
+        <div id="conn-status"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -189,12 +243,6 @@ position:relative; min-height:65px; display:flex; align-items:center; justify-co
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const PASS = 'Iyad@002005';
-const OWNER = 'josephcove0';
-const REPO  = 'dolcetta-';
-const FILE  = 'memories.json';
-const CONN_FILE = 'connections.json';
-const ENC_KEY    = 'dlc_enc';
-const ENC_IV_KEY = 'dlc_iv';
 const SUPABASE_URL = 'https://hlohijsctkfdiyrgmuqp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsb2hpanNjdGtmZGl5cmdtdXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNzE5OTYsImV4cCI6MjA4OTk0Nzk5Nn0.18_gY5ohSwQTRx0-HKdEhe9dvkPzl3SXANLv-EiTwDo';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -208,64 +256,44 @@ const BUILTINS = [
   "Your Scent","Your Love Letter","Before We Were Dating"
 ];
 
-let extras=[], photo64=null, selSzVal=1.8, token=null, tmpPw=null;
-let builtinConns={};
+let extras = [];
+let photo64 = null;
+let selSzVal = 1.8;
+let builtinConns = {};
+let editingId = null;
+let _adminChannel = null;
 
-// ── CRYPTO ───────────────────────────────────────────────────────────────────
-async function deriveKey(pw){
-  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey(
-    {name:'PBKDF2', salt:new TextEncoder().encode('dlc2025salt'), iterations:100000, hash:'SHA-256'},
-    km, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']
-  );
-}
-async function encryptStr(str, pw){
-  const key=await deriveKey(pw), iv=crypto.getRandomValues(new Uint8Array(12));
-  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv}, key, new TextEncoder().encode(str));
-  localStorage.setItem(ENC_KEY, btoa(String.fromCharCode(...new Uint8Array(ct))));
-  localStorage.setItem(ENC_IV_KEY, btoa(String.fromCharCode(...iv)));
-}
-async function decryptStr(pw){
-  const cs=localStorage.getItem(ENC_KEY), is=localStorage.getItem(ENC_IV_KEY);
-  if(!cs||!is) return null;
-  try {
-    const key=await deriveKey(pw);
-    const ct=Uint8Array.from(atob(cs),c=>c.charCodeAt(0));
-    const iv=Uint8Array.from(atob(is),c=>c.charCodeAt(0));
-    const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct);
-    return new TextDecoder().decode(pt);
-  } catch{ return null; }
-}
-
-// ── AUTH ─────────────────────────────────────────────────────────────────────
 async function tryPw(){
   const pw=document.getElementById('pw-in').value;
-  if(pw!==PASS){ showMsg('pw-err','wrong password'); document.getElementById('pw-in').value=''; return; }
+  if(pw!==PASS){
+    showMsg('pw-err','wrong password');
+    document.getElementById('pw-in').value='';
+    return;
+  }
   showAdmin();
 }
-async function saveTok(){
-  showAdmin();
-}
-
-let _adminChannel = null;
 
 function showAdmin(){
   document.getElementById('s-pw').style.display='none';
-  document.getElementById('s-tok').style.display='none';
   document.getElementById('s-admin').style.display='block';
+  openTab('create');
   loadMemories();
   startAdminLiveSync();
 }
-function lock() { location.reload(); }
-function clearTok(){ location.reload(); }
-
+function lock(){ location.reload(); }
 document.getElementById('pw-in').addEventListener('keydown', e=>{ if(e.key==='Enter') tryPw(); });
-document.getElementById('tok-in').addEventListener('keydown', e=>{ if(e.key==='Enter') saveTok(); });
 function showMsg(id, msg){ const el=document.getElementById(id); el.textContent=msg; setTimeout(()=>el.textContent='',3000); }
+
+function openTab(tabName){
+  document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+  document.getElementById(`tab-${tabName}`).classList.add('active');
+}
 
 function startAdminLiveSync(){
   if (_adminChannel) return;
-
   _adminChannel = sb
     .channel('dolcetta-admin-live')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'memories' }, () => loadMemories())
@@ -273,17 +301,13 @@ function startAdminLiveSync(){
     .subscribe();
 }
 
-// ── LOAD ─────────────────────────────────────────────────────────────────────
 async function loadMemories(){
   const btn = document.getElementById('refresh-btn');
   if(btn){ btn.textContent='↻ loading...'; btn.disabled=true; }
   try {
     const [{ data: memRows, error: memErr }, { data: connRows, error: connErr }] = await Promise.all([
-      sb.from('memories')
-        .select('id,name,text,photo,sz,connect_to,created_at')
-        .order('created_at', { ascending: true }),
-      sb.from('built_in_connections')
-        .select('source_idx,target_idx')
+      sb.from('memories').select('id,name,text,photo,sz,connect_to,created_at').order('created_at', { ascending: true }),
+      sb.from('built_in_connections').select('source_idx,target_idx')
     ]);
 
     if (memErr) throw memErr;
@@ -295,23 +319,22 @@ async function loadMemories(){
       text: row.text,
       sz: Number(row.sz),
       ...(row.photo ? { photo: row.photo } : {}),
-      ...(row.connect_to !== null && row.connect_to !== undefined
-        ? { connectTo: Number(row.connect_to) }
-        : {})
+      ...(row.connect_to !== null && row.connect_to !== undefined ? { connectTo: Number(row.connect_to) } : {})
     }));
 
-    builtinConns = Object.fromEntries(
-      (connRows || []).map(row => [Number(row.source_idx), Number(row.target_idx)])
-    );
+    builtinConns = Object.fromEntries((connRows || []).map(row => [Number(row.source_idx), Number(row.target_idx)]));
 
     renderList();
     buildConnectDropdown();
     renderBuiltinConnRows();
 
-    if(btn){ btn.textContent='✦ done'; setTimeout(()=>{ btn.textContent='↻ refresh'; btn.disabled=false; }, 1200); }
+    if(btn){
+      btn.textContent='✦ done';
+      setTimeout(()=>{ btn.textContent='↻ refresh'; btn.disabled=false; }, 1200);
+    }
   } catch(e){
     if(btn){ btn.textContent='↻ refresh'; btn.disabled=false; }
-    st('error: '+e.message,'err');
+    st('error: ' + e.message, 'err');
   }
 }
 
@@ -319,24 +342,25 @@ function renderList(){
   const el=document.getElementById('memory-list');
   let h='';
   BUILTINS.forEach(name=>{
-    h+=`<div class="mc builtin"><div class="mc-info"><div class="mc-name">${name}</div><div class="mc-prev">built-in memory</div></div><span class="tag tag-bi">built-in</span></div>`;
+    h += `<div class="mc builtin"><div class="mc-info"><div class="mc-name">${escapeHtml(name)}</div><div class="mc-prev">built-in memory</div></div><span class="tag tag-bi">built-in</span></div>`;
   });
   extras.forEach((m,i)=>{
-    const prev=(m.text||'').slice(0,65)+'...';
-    const conn=m.connectTo!==undefined ? `<span style="font-size:10px;color:rgba(255,215,80,.55);font-family:monospace;margin-left:6px;">→ ${allNames()[m.connectTo]||'?'}</span>` : '';
-    h+=`<div class="mc">
+    const prev=((m.text||'').slice(0,65) + ((m.text||'').length>65?'...':''));
+    const conn=m.connectTo!==undefined ? `<span style="font-size:10px;color:rgba(255,215,80,.55);font-family:monospace;margin-left:6px;">→ ${escapeHtml(allNames()[m.connectTo]||'?')}</span>` : '';
+    h += `<div class="mc">
       <div class="mc-info">
-        <div class="mc-name">${m.photo?'📷 ':''}${m.name}${conn}</div>
-        <div class="mc-prev">${prev}</div>
+        <div class="mc-name">${m.photo?'📷 ':''}${escapeHtml(m.name)}${conn}</div>
+        <div class="mc-prev">${escapeHtml(prev)}</div>
       </div>
       <div class="mc-right">
         ${m.photo?'<span class="tag tag-img">photo</span>':''}
         <span class="tag tag-add">added</span>
-        <button class="del-btn" onclick="delMem(${i})">✕</button>
+        <button class="mini-btn" onclick="startEdit(${i})">edit</button>
+        <button class="mini-btn del-btn" onclick="delMem(${i})">delete</button>
       </div>
     </div>`;
   });
-  el.innerHTML=h;
+  el.innerHTML = h || `<div style="font-size:12px;color:rgba(245,160,174,.3);font-family:monospace;padding:.5rem 0;">nothing here yet</div>`;
 }
 
 function renderBuiltinConnRows(){
@@ -348,10 +372,10 @@ function renderBuiltinConnRows(){
     let opts = '<option value="">— no connection —</option>';
     names.forEach((n, j) => {
       if (j === i) return;
-      opts += `<option value="${j}" ${current===j?'selected':''}>${n}</option>`;
+      opts += `<option value="${j}" ${current===j?'selected':''}>${escapeHtml(n)}</option>`;
     });
     h += `<div class="conn-row">
-      <div class="conn-name" title="${name}">${name}</div>
+      <div class="conn-name" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
       <span style="color:rgba(232,130,145,.4);font-size:11px;">→</span>
       <select id="bc-${i}">${opts}</select>
     </div>`;
@@ -382,7 +406,9 @@ async function saveBuiltinConnections(){
     await loadMemories();
     cst('✦ saved');
     setTimeout(()=>cst(''), 3000);
-  } catch(e){ cst('error: '+e.message); }
+  } catch(e){
+    cst('error: ' + e.message);
+  }
   document.getElementById('save-conn-btn').disabled = false;
 }
 
@@ -390,13 +416,17 @@ function allNames(){ return [...BUILTINS, ...extras.map(m=>m.name)]; }
 
 function buildConnectDropdown(){
   const sel=document.getElementById('f-connect');
+  const current = sel.value;
   sel.innerHTML='<option value="">— no connection —</option>';
   allNames().forEach((name,i)=>{
-    const o=document.createElement('option'); o.value=i; o.textContent=name; sel.appendChild(o);
+    const o=document.createElement('option');
+    o.value=i;
+    o.textContent=name;
+    sel.appendChild(o);
   });
+  if ([...sel.options].some(opt => opt.value === current)) sel.value = current;
 }
 
-// ── PHOTO ────────────────────────────────────────────────────────────────────
 function handlePhoto(input){
   const file=input.files[0]; if(!file) return;
   const reader=new FileReader();
@@ -418,25 +448,66 @@ function handlePhoto(input){
   reader.readAsDataURL(file);
 }
 function removePhoto(){
-  photo64=null; document.getElementById('f-photo').value='';
+  photo64=null;
+  document.getElementById('f-photo').value='';
   document.getElementById('photo-preview').style.display='none';
+  document.getElementById('photo-preview').src='';
   document.getElementById('rm-ph-btn').style.display='none';
   document.querySelector('.pd-text').textContent='tap to choose a photo';
 }
 function selSz(v){
   selSzVal=v;
-  document.querySelectorAll('.sz').forEach(el=>el.classList.toggle('sel',parseFloat(el.dataset.sz)===v));
+  document.querySelectorAll('.sz').forEach(el=>el.classList.toggle('sel', parseFloat(el.dataset.sz)===v));
 }
 
-// ── SAVE ─────────────────────────────────────────────────────────────────────
+function startEdit(i){
+  const m = extras[i];
+  editingId = m.id;
+  document.getElementById('f-name').value = m.name || '';
+  document.getElementById('f-text').value = m.text || '';
+  document.getElementById('f-connect').value = m.connectTo !== undefined ? String(m.connectTo) : '';
+  photo64 = m.photo || null;
+  if (photo64) {
+    document.getElementById('photo-preview').src = photo64;
+    document.getElementById('photo-preview').style.display = 'block';
+    document.getElementById('rm-ph-btn').style.display = 'inline';
+    document.querySelector('.pd-text').textContent = 'current photo loaded';
+  } else {
+    removePhoto();
+  }
+  selSz(Number(m.sz || 1.8));
+  document.getElementById('form-mode').textContent = `mode: editing "${m.name}"`;
+  document.getElementById('save-btn').textContent = '✦ update memory';
+  document.getElementById('cancel-edit-btn').style.display = 'block';
+  openTab('create');
+  st('editing memory', 'work');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function cancelEdit(){
+  editingId = null;
+  document.getElementById('f-name').value='';
+  document.getElementById('f-text').value='';
+  document.getElementById('f-connect').value='';
+  document.getElementById('form-mode').textContent='mode: creating a new memory';
+  document.getElementById('save-btn').textContent='✦ add to the sky';
+  document.getElementById('cancel-edit-btn').style.display='none';
+  removePhoto();
+  selSz(1.8);
+  st('', '');
+}
+
 async function saveMemory(){
   const name=document.getElementById('f-name').value.trim();
   const text=document.getElementById('f-text').value.trim();
   const cv=document.getElementById('f-connect').value;
+
   if(!name){ st('give it a name','err'); return; }
   if(!text){ st('write something for her','err'); return; }
+
   document.getElementById('save-btn').disabled=true;
-  st('saving to the sky...','work');
+  st(editingId ? 'updating memory...' : 'saving to the sky...','work');
+
   try {
     const payload = {
       name,
@@ -446,35 +517,56 @@ async function saveMemory(){
       connect_to: cv !== '' ? Number(cv) : null
     };
 
-    const { error } = await sb.from('memories').insert(payload);
+    let error;
+    if (editingId) {
+      ({ error } = await sb.from('memories').update(payload).eq('id', editingId));
+    } else {
+      ({ error } = await sb.from('memories').insert(payload));
+    }
     if (error) throw error;
 
     await loadMemories();
-    document.getElementById('f-name').value='';
-    document.getElementById('f-text').value='';
-    document.getElementById('f-connect').value='';
-    removePhoto(); selSz(1.8);
-    st('✦ added to the sky','ok');
+    const wasEditing = !!editingId;
+    cancelEdit();
+    st(wasEditing ? '✦ memory updated' : '✦ added to the sky','ok');
     setTimeout(()=>st('',''),3000);
-  } catch(e){ st('error: '+e.message,'err'); }
+    if (wasEditing) openTab('memories');
+  } catch(e){
+    st('error: ' + e.message,'err');
+  }
+
   document.getElementById('save-btn').disabled=false;
 }
 
-// ── DELETE ───────────────────────────────────────────────────────────────────
 async function delMem(i){
   if(!confirm(`Remove "${extras[i].name}"?`)) return;
   st('removing...','work');
   try {
     const { error } = await sb.from('memories').delete().eq('id', extras[i].id);
     if (error) throw error;
+    if (editingId === extras[i].id) cancelEdit();
     await loadMemories();
-    st('removed','ok'); setTimeout(()=>st('',''),2000);
-  } catch(e){ st('error: '+e.message,'err'); }
+    st('removed','ok');
+    setTimeout(()=>st('',''),2000);
+  } catch(e){
+    st('error: ' + e.message,'err');
+  }
 }
 
-function st(msg,type){ const el=document.getElementById('status'); el.textContent=msg; el.className=type||''; }
+function st(msg,type){
+  const el=document.getElementById('status');
+  el.textContent=msg;
+  el.className=type||'';
+}
+function escapeHtml(str){
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
-// Drag-drop photo
 const drop=document.getElementById('photo-drop');
 drop.addEventListener('dragover', e=>{e.preventDefault();drop.classList.add('dragover');});
 drop.addEventListener('dragleave', ()=>drop.classList.remove('dragover'));
