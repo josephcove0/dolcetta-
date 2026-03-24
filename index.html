@@ -1957,7 +1957,7 @@ function initTrailLines(){
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('color',    new THREE.Float32BufferAttribute(col, 3));
   const mat = new THREE.LineBasicMaterial({
-    vertexColors: true, transparent: true, opacity: 1,
+    vertexColors: true, transparent: true, opacity: 0.82,
     blending: THREE.AdditiveBlending, depthWrite: false
   });
   trailLines = new THREE.LineSegments(geo, mat);
@@ -1987,8 +1987,8 @@ function updateStarTrails(){
   const SEGS     = TRAIL_HISTORY - 1;
   const outPos   = trailLines.geometry.attributes.position.array;
   const outCol   = trailLines.geometry.attributes.color.array;
-  const activeSegs = Math.min(SEGS, Math.max(2, Math.ceil(vel * 2100)));
-  const trailAlpha = Math.min(0.92, vel * 420);
+  const activeSegs = Math.min(SEGS, Math.max(2, Math.ceil(vel * 1650)));
+  const trailAlpha = Math.min(0.68, vel * 300);
 
   const currentQ = scene.quaternion;
   const invCurrent = currentQ.clone().invert();
