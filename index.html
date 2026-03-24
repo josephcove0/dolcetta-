@@ -1944,6 +1944,7 @@ function updateConstellationAlpha(t) {
 
 // ─── STAR TRAIL SYSTEM ───────────────────────────────────────────────────────
 const TRAIL_HISTORY = 20;
+const MAX_ACTIVE_TRAIL_SEGS = 5;
 const sceneQuatHistory = [];
 let trailLines = null;
 
@@ -1987,7 +1988,7 @@ function updateStarTrails(){
   const SEGS     = TRAIL_HISTORY - 1;
   const outPos   = trailLines.geometry.attributes.position.array;
   const outCol   = trailLines.geometry.attributes.color.array;
-  const activeSegs = Math.min(SEGS, Math.max(2, Math.ceil(vel * 1650)));
+  const activeSegs = Math.min(SEGS, MAX_ACTIVE_TRAIL_SEGS, Math.max(2, Math.ceil(vel * 1650)));
   const trailAlpha = Math.min(0.68, vel * 300);
 
   const currentQ = scene.quaternion;
