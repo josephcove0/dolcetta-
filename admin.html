@@ -1,398 +1,604 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>dolcetta admin</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <style>
-    :root {
-      --bg: #090713;
-      --panel: rgba(20, 14, 31, 0.92);
-      --panel-2: rgba(32, 20, 47, 0.9);
-      --text: #f6e8ef;
-      --muted: #bfa9b5;
-      --pink: #e8526a;
-      --pink-2: #ff8fa5;
-      --line: rgba(232, 82, 106, 0.18);
-      --ok: #8fe0b7;
-      --warn: #ffd98a;
-      --err: #ff9aa8;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0; font-family: Inter, system-ui, sans-serif; color: var(--text);
-      background:
-        radial-gradient(circle at top, rgba(232,82,106,.12), transparent 28%),
-        radial-gradient(circle at bottom, rgba(255,143,165,.08), transparent 24%),
-        var(--bg);
-      min-height: 100vh;
-    }
-    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
-    .card {
-      background: var(--panel); border: 1px solid var(--line); border-radius: 20px;
-      backdrop-filter: blur(10px); box-shadow: 0 15px 40px rgba(0,0,0,.35);
-    }
-    .hero { padding: 22px; margin-bottom: 18px; }
-    .hero h1 { margin: 0 0 6px; font-size: 26px; }
-    .sub { color: var(--muted); font-size: 14px; }
-    .grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 18px; }
-    .section { padding: 18px; }
-    .section h2 { margin: 0 0 14px; font-size: 18px; }
-    .field { margin-bottom: 14px; }
-    label { display: block; margin-bottom: 7px; font-size: 13px; color: var(--muted); }
-    input[type="text"], input[type="password"], textarea, select {
-      width: 100%; border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
-      border-radius: 14px; padding: 12px 13px; outline: none;
-    }
-    textarea { min-height: 130px; resize: vertical; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .btns { display: flex; flex-wrap: wrap; gap: 10px; }
-    button {
-      border: 1px solid var(--line); background: rgba(232,82,106,.12); color: var(--text);
-      border-radius: 999px; padding: 10px 16px; cursor: pointer; font-weight: 600;
-    }
-    button:hover { background: rgba(232,82,106,.2); }
-    button.primary { background: var(--pink); border-color: transparent; }
-    button.primary:hover { filter: brightness(1.05); }
-    button.ghost { background: transparent; }
-    button.danger { background: rgba(255,90,120,.12); }
-    .status { min-height: 22px; margin-top: 10px; font-size: 14px; }
-    .ok { color: var(--ok); }
-    .warn { color: var(--warn); }
-    .err { color: var(--err); }
-    .memory-list { display: grid; gap: 10px; max-height: 70vh; overflow: auto; }
-    .memory-item {
-      border: 1px solid var(--line); border-radius: 16px; padding: 14px; background: rgba(255,255,255,.02);
-    }
-    .memory-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
-    .memory-name { font-weight: 700; }
-    .pill { font-size: 11px; padding: 4px 8px; border-radius: 999px; background: rgba(232,82,106,.14); color: var(--pink-2); }
-    .memory-text { margin: 8px 0; color: #e8d6de; font-size: 14px; white-space: pre-wrap; }
-    .muted { color: var(--muted); font-size: 13px; }
-    .thumb { max-width: 100%; max-height: 180px; border-radius: 12px; margin-top: 10px; border: 1px solid var(--line); }
-    .topbar { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; }
-    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .row { grid-template-columns: 1fr; } }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>admin · dolcetta</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; color:#fde8eb; }
+.centered { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#00010f; }
+.auth-box {
+  text-align:center; max-width:340px; width:92%; padding:2rem;
+  background:#1a0308; border:1px solid #c0324a; border-radius:16px;
+}
+.auth-box h2 { font-size:14px; color:#fff0f2; margin-bottom:.4rem; letter-spacing:2px; font-weight:400; font-family:monospace; text-transform:uppercase; }
+.auth-box p { font-size:11px; color:rgba(245,160,174,.4); margin-bottom:1.5rem; font-family:monospace; line-height:1.7; }
+.auth-box input {
+  width:100%; padding:11px 14px; background:rgba(255,255,255,.05);
+  border:1px solid rgba(232,82,106,.35); border-radius:8px; color:#fde8eb;
+  font-size:13px; outline:none; margin-bottom:.8rem; font-family:monospace; text-align:center;
+}
+.auth-box input:focus { border-color:#e8526a; }
+.auth-box .main-btn {
+  width:100%; padding:11px; background:transparent; border:1px solid #e8526a;
+  color:#e8526a; border-radius:30px; font-size:12px; letter-spacing:2px;
+  font-family:monospace; cursor:pointer; transition:all .3s; margin-top:.3rem;
+}
+.auth-box .main-btn:hover { background:#e8526a; color:#150003; }
+.err-msg { font-size:11px; color:#e8526a; margin-top:.7rem; min-height:1rem; font-family:monospace; }
+.ok-msg { font-size:11px; color:#5dcaa5; margin-top:.7rem; min-height:1rem; font-family:monospace; }
+
+#admin-ui { max-width:760px; margin:0 auto; padding:2rem 1.5rem 5rem; }
+.admin-header {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:1.2rem; padding-bottom:1rem; border-bottom:1px solid rgba(192,50,74,.3);
+}
+.admin-header h1 { font-size:14px; color:#fff0f2; font-weight:400; letter-spacing:3px; text-transform:uppercase; font-family:monospace; }
+.hdr-links { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.hdr-links a, .hdr-links button { font-size:11px; color:rgba(232,82,106,.55); font-family:monospace; text-decoration:none; letter-spacing:1px; background:none; border:none; cursor:pointer; }
+.hdr-links a:hover, .hdr-links button:hover { color:#e8526a; }
+
+.tabs {
+  display:flex; gap:8px; margin-bottom:1.3rem; flex-wrap:wrap;
+}
+.tab-btn {
+  background:rgba(25,3,8,.7); border:1px solid rgba(232,82,106,.35); color:rgba(245,160,174,.6);
+  padding:9px 16px; border-radius:999px; cursor:pointer; font-family:monospace; font-size:11px; letter-spacing:1.5px;
+  transition:all .2s;
+}
+.tab-btn:hover { border-color:#e8526a; color:#e8526a; }
+.tab-btn.active { background:rgba(232,82,106,.14); border-color:#e8526a; color:#fff0f2; }
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+
+.sec-title { font-size:10px; color:rgba(232,82,106,.55); letter-spacing:2px; text-transform:uppercase; font-family:monospace; margin-bottom:1rem; }
+.panel-card {
+  background:#1a0308; border:1px solid rgba(192,50,74,.22); border-radius:14px; padding:1.3rem;
+}
+#memory-list { display:flex; flex-direction:column; gap:8px; }
+.mc { background:#120208; border:1px solid rgba(192,50,74,.22); border-radius:10px; padding:.9rem 1rem; display:flex; align-items:flex-start; justify-content:space-between; gap:.8rem; }
+.mc.builtin { opacity:.55; }
+.mc-info { flex:1; min-width:0; }
+.mc-name { font-size:13px; color:#fff0f2; margin-bottom:.2rem; }
+.mc-prev { font-size:11px; color:rgba(245,160,174,.45); font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mc-right { display:flex; align-items:center; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; }
+.tag { font-size:9px; font-family:monospace; letter-spacing:1px; padding:2px 7px; border-radius:10px; white-space:nowrap; }
+.tag-bi { background:rgba(232,82,106,.1); color:rgba(232,82,106,.4); }
+.tag-add { background:rgba(255,215,80,.14); color:#f0c060; }
+.tag-img { background:rgba(93,202,165,.14); color:#5dcaa5; }
+.tag-link { background:rgba(93,150,255,.12); color:#9fc0ff; }
+.mini-btn {
+  background:none; border:1px solid rgba(232,82,106,.28); color:rgba(245,160,174,.7);
+  font-size:10px; cursor:pointer; padding:5px 10px; line-height:1; border-radius:999px;
+  font-family:monospace; letter-spacing:1px; transition:all .2s;
+}
+.mini-btn:hover { border-color:#e8526a; color:#e8526a; }
+.del-btn { border-color:rgba(232,82,106,.2); color:rgba(232,82,106,.5); }
+.del-btn:hover { color:#fff0f2; background:rgba(232,82,106,.14); }
+
+#builtin-connections-form { background:#1a0308; border:1px solid rgba(192,50,74,.22); border-radius:14px; padding:1.3rem; }
+#builtin-connections-form h3 { font-size:13px; color:rgba(232,130,145,.9); margin:0 0 .8rem; letter-spacing:1px; font-weight:600; }
+.conn-row { display:flex; align-items:center; gap:.6rem; margin-bottom:.55rem; }
+.conn-row .conn-name { font-size:11px; color:rgba(245,200,210,.75); font-family:monospace; width:180px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.conn-row select { flex:1; background:rgba(10,4,18,.7); color:rgba(245,200,210,.9); border:1px solid rgba(232,130,145,.2); border-radius:6px; padding:.3rem .5rem; font-size:11px; font-family:monospace; }
+#save-conn-btn {
+  margin-top:.8rem; background:rgba(232,130,145,.15); color:#e88295; border:1px solid rgba(232,130,145,.3);
+  border-radius:8px; padding:.6rem 1.2rem; font-size:12px; letter-spacing:1px; cursor:pointer; font-family:monospace;
+}
+#save-conn-btn:hover { background:rgba(232,130,145,.25); }
+#conn-status { font-size:11px; font-family:monospace; margin-top:.5rem; color:rgba(245,200,210,.5); min-height:1rem; }
+
+#add-form { background:#1a0308; border:1px solid rgba(192,50,74,.38); border-radius:14px; padding:1.5rem; }
+#add-form h3 { font-size:11px; color:#fff0f2; font-weight:400; letter-spacing:2px; margin-bottom:1rem; text-transform:uppercase; font-family:monospace; }
+#form-mode {
+  margin-bottom:1rem; font-size:11px; color:rgba(245,160,174,.55); font-family:monospace; letter-spacing:1px;
+}
+.field { margin-bottom:1.1rem; }
+.field label { display:block; font-size:10px; color:rgba(232,82,106,.65); letter-spacing:1.5px; text-transform:uppercase; font-family:monospace; margin-bottom:.4rem; }
+.field input[type="text"], .field textarea, .field select {
+  width:100%; padding:10px 12px; background:rgba(255,255,255,.04);
+  border:1px solid rgba(232,82,106,.28); border-radius:8px; color:#fde8eb;
+  font-size:14px; font-family:'Georgia',serif; outline:none; resize:vertical; transition:border-color .2s;
+}
+.field select { font-family:monospace; font-size:12px; cursor:pointer; }
+.field select option { background:#1a0308; }
+.field input[type="text"]:focus, .field textarea:focus, .field select:focus { border-color:#e8526a; }
+.field textarea { min-height:85px; line-height:1.65; }
+.field-hint { font-size:10px; color:rgba(245,160,174,.3); font-family:monospace; margin-top:.35rem; line-height:1.5; }
+
+.photo-drop {
+  border:1px dashed rgba(232,82,106,.32); border-radius:10px; padding:1.1rem;
+  text-align:center; cursor:pointer; transition:border-color .2s, background .2s;
+  position:relative; min-height:65px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:.3rem;
+}
+.photo-drop:hover, .photo-drop.dragover { border-color:#e8526a; background:rgba(232,82,106,.05); }
+.photo-drop input[type="file"] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+.pd-text { font-size:12px; color:rgba(245,160,174,.45); font-family:monospace; }
+.pd-sub { font-size:10px; color:rgba(245,160,174,.25); font-family:monospace; }
+#photo-preview { max-width:100%; max-height:150px; border-radius:8px; margin-top:.7rem; display:none; object-fit:cover; }
+.rm-photo { font-size:10px; color:rgba(232,82,106,.45); background:none; border:none; cursor:pointer; font-family:monospace; display:none; margin-top:.3rem; }
+.rm-photo:hover { color:#e8526a; }
+
+.size-opts { display:flex; gap:8px; }
+.sz { flex:1; padding:7px; text-align:center; border:1px solid rgba(232,82,106,.28); border-radius:8px; cursor:pointer; font-family:monospace; font-size:11px; color:rgba(245,160,174,.5); transition:all .2s; }
+.sz.sel, .sz:hover { border-color:#e8526a; color:#e8526a; background:rgba(232,82,106,.07); }
+
+.form-actions { display:flex; gap:10px; margin-top:1.2rem; }
+#save-btn, #cancel-edit-btn {
+  flex:1; padding:13px; background:transparent; border:1px solid #e8526a; color:#e8526a; border-radius:30px;
+  font-size:13px; letter-spacing:2px; font-family:monospace; cursor:pointer; transition:all .3s;
+}
+#save-btn:hover:not(:disabled), #cancel-edit-btn:hover { background:#e8526a; color:#150003; }
+#save-btn:disabled { opacity:.4; cursor:not-allowed; }
+#cancel-edit-btn { display:none; border-color:rgba(245,160,174,.3); color:rgba(245,160,174,.7); }
+#cancel-edit-btn:hover { background:rgba(245,160,174,.14); color:#fff0f2; border-color:rgba(245,160,174,.6); }
+
+#status { margin-top:.9rem; font-size:12px; font-family:monospace; text-align:center; min-height:1.2rem; letter-spacing:1px; }
+#status.ok { color:#5dcaa5; } #status.err { color:#e8526a; } #status.work { color:rgba(245,160,174,.5); }
+
+@media (max-width:640px){
+  #admin-ui { padding:1.3rem 1rem 4rem; }
+  .admin-header { align-items:flex-start; gap:1rem; flex-direction:column; }
+  .conn-row { flex-direction:column; align-items:stretch; }
+  .conn-row .conn-name { width:auto; }
+  .mc { flex-direction:column; }
+  .mc-right { width:100%; justify-content:flex-start; }
+  .form-actions { flex-direction:column; }
+}
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card hero">
-      <div class="topbar">
-        <div>
-          <h1>✦ dolcetta admin</h1>
-          <div class="sub">Supabase version. This replaces the old GitHub-token flow, so new stars save to the same backend the map should read from.</div>
-        </div>
-        <div class="btns">
-          <button class="ghost" id="reloadBtn">↻ refresh</button>
-          <a href="./index.html"><button type="button">↗ open sky</button></a>
-        </div>
+
+<div id="s-pw" class="centered">
+  <div class="auth-box">
+    <h2>✦ dolcetta admin</h2>
+    <p>enter your password</p>
+    <input type="password" id="pw-in" placeholder="password" autocomplete="current-password">
+    <button class="main-btn" onclick="tryPw()">continue</button>
+    <div class="err-msg" id="pw-err"></div>
+  </div>
+</div>
+
+<div id="s-admin" style="display:none;">
+  <div id="admin-ui">
+    <div class="admin-header">
+      <h1>✦ memory editor</h1>
+      <div class="hdr-links">
+        <a href="./index.html" target="_blank">↗ open sky</a>
+        <button onclick="lock()">lock</button>
       </div>
     </div>
 
-    <div class="grid">
-      <div class="card section">
-        <h2>connection</h2>
-        <div class="field">
-          <label>Supabase URL</label>
-          <input id="sbUrl" type="text" placeholder="https://YOUR-PROJECT.supabase.co" />
-        </div>
-        <div class="field">
-          <label>Supabase anon key</label>
-          <input id="sbKey" type="password" placeholder="paste your anon key" />
-        </div>
-        <div class="field">
-          <label>table name</label>
-          <input id="tableName" type="text" value="memories" />
-        </div>
-        <div class="btns">
-          <button class="primary" id="connectBtn">connect</button>
-          <button class="ghost" id="saveConfigBtn">save config on this device</button>
-          <button class="ghost" id="clearConfigBtn">clear saved config</button>
-        </div>
-        <div class="status" id="connectStatus"></div>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="create" onclick="openTab('create')">create</button>
+      <button class="tab-btn" data-tab="memories" onclick="openTab('memories')">memories</button>
+      <button class="tab-btn" data-tab="connections" onclick="openTab('connections')">connections</button>
+      <button onclick="loadMemories()" id="refresh-btn" class="tab-btn" style="margin-left:auto;">↻ refresh</button>
+    </div>
 
-        <hr style="border:none;border-top:1px solid var(--line);margin:18px 0;">
-
-        <h2>memory form</h2>
+    <div id="tab-create" class="tab-panel active">
+      <div id="add-form">
+        <h3>memory form</h3>
+        <div id="form-mode">mode: creating a new memory</div>
         <div class="field">
           <label>name</label>
-          <input id="fName" type="text" />
+          <input type="text" id="f-name" placeholder="e.g. The Rooftop Night">
         </div>
         <div class="field">
           <label>text</label>
-          <textarea id="fText"></textarea>
-        </div>
-        <div class="row">
-          <div class="field">
-            <label>star size</label>
-            <select id="fSize">
-              <option value="1.5">small</option>
-              <option value="1.8" selected>medium</option>
-              <option value="2.2">large</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>connect to (optional)</label>
-            <select id="fConnect">
-              <option value="">— no connection —</option>
-            </select>
-          </div>
+          <textarea id="f-text" placeholder="what happened, how it felt, why it matters..."></textarea>
         </div>
         <div class="field">
-          <label>photo (optional)</label>
-          <input id="fPhoto" type="file" accept="image/*" />
+          <label>photo <span style="opacity:.38">(optional)</span></label>
+          <div class="photo-drop" id="photo-drop">
+            <input type="file" id="f-photo" accept="image/*" onchange="handlePhoto(this)">
+            <div class="pd-text">tap to choose a photo</div>
+            <div class="pd-sub">jpg · png · webp · resized & embedded</div>
+          </div>
+          <img id="photo-preview" alt="">
+          <button class="rm-photo" id="rm-ph-btn" onclick="removePhoto()" type="button">✕ remove photo</button>
         </div>
-        <div class="btns">
-          <button class="primary" id="saveBtn">✦ add to the sky</button>
-          <button class="ghost" id="resetBtn">clear form</button>
+        <div class="field">
+          <label>connect to <span style="opacity:.38">(optional)</span></label>
+          <select id="f-connect">
+            <option value="">— no connection —</option>
+          </select>
+          <div class="field-hint">draws a constellation line between this star and the chosen memory.</div>
         </div>
-        <div class="status" id="saveStatus"></div>
+        <div class="field">
+          <label>star size</label>
+          <div class="size-opts">
+            <div class="sz" onclick="selSz(1.5)" data-sz="1.5">small</div>
+            <div class="sz sel" onclick="selSz(1.8)" data-sz="1.8">medium</div>
+            <div class="sz" onclick="selSz(2.2)" data-sz="2.2">large</div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button id="save-btn" onclick="saveMemory()">✦ add to the sky</button>
+          <button id="cancel-edit-btn" onclick="cancelEdit()" type="button">cancel edit</button>
+        </div>
+        <div id="status"></div>
       </div>
+    </div>
 
-      <div class="card section">
-        <h2>all memories</h2>
-        <div class="memory-list" id="memoryList"></div>
+    <div id="tab-memories" class="tab-panel">
+      <div class="panel-card">
+        <div class="sec-title">all memories</div>
+        <div id="memory-list"><div style="font-size:12px;color:rgba(245,160,174,.3);font-family:monospace;padding:.5rem 0;">loading...</div></div>
+      </div>
+    </div>
+
+    <div id="tab-connections" class="tab-panel">
+      <div id="builtin-connections-form">
+        <h3>✦ built-in connections</h3>
+        <div class="field-hint" style="margin-bottom:1rem;">chain built-in memories together — pick a memory and choose which one it connects to. leave blank to remove a connection.</div>
+        <div id="builtin-conn-rows"></div>
+        <button id="save-conn-btn" onclick="saveBuiltinConnections()">save connections</button>
+        <div id="conn-status"></div>
       </div>
     </div>
   </div>
+</div>
 
-  <script>
-    const CONFIG_KEY = 'dolcetta_supabase_config_v1';
-    const DEFAULT_SUPABASE_URL = 'https://hlohijjsctkfdiyrgmuqp.supabase.co';
-    const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsb2hpanNjdGtmZGl5cmdtdXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNzE5OTYsImV4cCI6MjA4OTk0Nzk5Nn0.18_gY5ohSwQTRx0-HKdEhe9dvkPzl3SXANLv-EiTwDo';
-    const DEFAULT_SUPABASE_TABLE = 'memories';
-    let supabaseClient = null;
-    let currentRows = [];
-    let photoBase64 = '';
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const PASS = 'Iyad@002005';
+const SUPABASE_URL = 'https://hlohijsctkfdiyrgmuqp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsb2hpanNjdGtmZGl5cmdtdXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNzE5OTYsImV4cCI6MjA4OTk0Nzk5Nn0.18_gY5ohSwQTRx0-HKdEhe9dvkPzl3SXANLv-EiTwDo';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const $ = (id) => document.getElementById(id);
+const BUILTINS = [
+  "The Instagram Story","The Airport Text","The Black Hole Talk",
+  "I Couldn't Stop Looking","7aga fel dein","Our First Photo",
+  "The Cinema Date","Pizza After","The Monday Confession","Not Yet",
+  "November 17th","Would you be my girlfriend? 🤨","The Real Proposal",
+  "Holding Your Hand","Sleeping on My Lap","The Pizza Video",
+  "Your Scent","Your Love Letter","Before We Were Dating"
+];
 
-    function setStatus(id, text, kind = '') {
-      const el = $(id);
-      el.className = `status ${kind}`.trim();
-      el.textContent = text;
+let extras = [];
+let builtinConns = {};
+let photo64 = null;
+let selSzVal = 1.8;
+let editingId = null;
+let _adminChannel = null;
+
+const $ = (id) => document.getElementById(id);
+
+function tryPw(){
+  const pw = $('pw-in').value;
+  if (pw !== PASS) {
+    showPwErr('wrong password');
+    $('pw-in').value = '';
+    return;
+  }
+  $('s-pw').style.display = 'none';
+  $('s-admin').style.display = 'block';
+  openTab('create');
+  loadMemories();
+  startAdminLiveSync();
+}
+
+function lock(){ location.reload(); }
+$('pw-in').addEventListener('keydown', e => { if (e.key === 'Enter') tryPw(); });
+
+function showPwErr(msg){ $('pw-err').textContent = msg || ''; }
+function setStatus(msg, kind=''){ const el = $('status'); el.className = kind ? kind : ''; el.textContent = msg || ''; }
+function setConnStatus(msg, kind=''){ const el = $('conn-status'); el.style.color = kind === 'err' ? '#e8526a' : kind === 'ok' ? '#5dcaa5' : 'rgba(245,200,210,.5)'; el.textContent = msg || ''; }
+
+function openTab(tabName){
+  document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+  const panel = document.getElementById(`tab-${tabName}`);
+  if (panel) panel.classList.add('active');
+}
+
+function escapeHtml(str=''){
+  return String(str)
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#39;');
+}
+
+function selSz(v){
+  selSzVal = Number(v);
+  document.querySelectorAll('.sz').forEach(el => el.classList.toggle('sel', Number(el.dataset.sz) === selSzVal));
+}
+
+function removePhoto(){
+  photo64 = null;
+  $('f-photo').value = '';
+  $('photo-preview').style.display = 'none';
+  $('photo-preview').src = '';
+  $('rm-ph-btn').style.display = 'none';
+}
+
+async function handlePhoto(input){
+  const file = input.files?.[0];
+  if (!file) { removePhoto(); return; }
+  try {
+    photo64 = await fileToDataUrl(file);
+    $('photo-preview').src = photo64;
+    $('photo-preview').style.display = 'block';
+    $('rm-ph-btn').style.display = 'inline-block';
+  } catch (err) {
+    setStatus(`photo failed: ${err.message || err}`, 'err');
+  }
+}
+
+function fileToDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function buildCombinedNames(extraRows = extras){
+  const names = [...BUILTINS];
+  extraRows.forEach(row => names.push(row.name || 'untitled memory'));
+  return names;
+}
+
+function populateConnectDropdown(currentConnect = '', excludeExtraId = null){
+  const sel = $('f-connect');
+  const names = buildCombinedNames();
+  const options = ['<option value="">— no connection —</option>'];
+  names.forEach((name, idx) => {
+    if (excludeExtraId !== null && idx >= BUILTINS.length) {
+      const extra = extras[idx - BUILTINS.length];
+      if (extra && String(extra.id) === String(excludeExtraId)) return;
     }
+    options.push(`<option value="${idx}">${idx < BUILTINS.length ? 'built-in' : 'added'} · ${escapeHtml(name)}</option>`);
+  });
+  sel.innerHTML = options.join('');
+  sel.value = currentConnect === null || currentConnect === undefined || currentConnect === '' ? '' : String(currentConnect);
+}
 
-    function saveConfigLocal() {
-      const payload = {
-        url: $('sbUrl').value.trim(),
-        key: $('sbKey').value.trim(),
-        table: $('tableName').value.trim() || 'memories'
-      };
-      localStorage.setItem(CONFIG_KEY, JSON.stringify(payload));
-      setStatus('connectStatus', 'saved on this device', 'ok');
-    }
+function renderBuiltinConnRows(){
+  const wrap = $('builtin-conn-rows');
+  const options = ['<option value="">— none —</option>'];
+  BUILTINS.forEach((name, idx) => options.push(`<option value="${idx}">${escapeHtml(name)}</option>`));
+  wrap.innerHTML = BUILTINS.map((name, idx) => `
+    <div class="conn-row">
+      <div class="conn-name">${escapeHtml(name)}</div>
+      <select data-source-idx="${idx}">
+        ${options.join('')}
+      </select>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('select').forEach(sel => {
+    const sourceIdx = Number(sel.dataset.sourceIdx);
+    sel.value = builtinConns[sourceIdx] === undefined ? '' : String(builtinConns[sourceIdx]);
+  });
+}
 
-    function loadConfigLocal() {
-      $('sbUrl').value = DEFAULT_SUPABASE_URL;
-      $('sbKey').value = DEFAULT_SUPABASE_KEY;
-      $('tableName').value = DEFAULT_SUPABASE_TABLE;
-      try {
-        const raw = localStorage.getItem(CONFIG_KEY);
-        if (!raw) return;
-        const cfg = JSON.parse(raw);
-        $('sbUrl').value = cfg.url || DEFAULT_SUPABASE_URL;
-        $('sbKey').value = cfg.key || DEFAULT_SUPABASE_KEY;
-        $('tableName').value = cfg.table || DEFAULT_SUPABASE_TABLE;
-      } catch {}
-    }
+function renderMemoryList(){
+  const list = $('memory-list');
+  const rows = [];
 
-    function clearForm() {
-      $('fName').value = '';
-      $('fText').value = '';
-      $('fSize').value = '1.8';
-      $('fConnect').value = '';
-      $('fPhoto').value = '';
-      photoBase64 = '';
-      setStatus('saveStatus', '');
-    }
+  BUILTINS.forEach((name, idx) => {
+    const target = builtinConns[idx];
+    rows.push(`
+      <div class="mc builtin">
+        <div class="mc-info">
+          <div class="mc-name">${escapeHtml(name)}</div>
+          <div class="mc-prev">built-in memory${target !== undefined ? ` · connects to ${escapeHtml(BUILTINS[target] || ('#' + target))}` : ''}</div>
+        </div>
+        <div class="mc-right">
+          <span class="tag tag-bi">BUILT-IN</span>
+          ${target !== undefined ? '<span class="tag tag-link">LINKED</span>' : ''}
+        </div>
+      </div>
+    `);
+  });
 
-    function escapeHtml(str = '') {
-      return str
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
-    }
+  extras.forEach((row, extraIdx) => {
+    const globalIdx = BUILTINS.length + extraIdx;
+    const prev = row.text ? escapeHtml(row.text).replace(/\n/g, ' ') : '';
+    const target = row.connect_to !== null && row.connect_to !== undefined && row.connect_to !== '' ? Number(row.connect_to) : null;
+    const targetName = Number.isInteger(target) ? buildCombinedNames()[target] : null;
+    rows.push(`
+      <div class="mc">
+        <div class="mc-info">
+          <div class="mc-name">${escapeHtml(row.name || 'untitled memory')}</div>
+          <div class="mc-prev">${prev || 'no text'}${targetName ? ` · connects to ${escapeHtml(targetName)}` : ''}</div>
+        </div>
+        <div class="mc-right">
+          <span class="tag tag-add">ADDED</span>
+          ${row.photo ? '<span class="tag tag-img">PHOTO</span>' : ''}
+          ${targetName ? '<span class="tag tag-link">LINKED</span>' : ''}
+          <button class="mini-btn" type="button" onclick="startEdit('${String(row.id).replaceAll("'", "\\'")}')">edit</button>
+          <button class="mini-btn del-btn" type="button" onclick="deleteMemory('${String(row.id).replaceAll("'", "\\'")}')">delete</button>
+        </div>
+      </div>
+    `);
+  });
 
-    async function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+  list.innerHTML = rows.length ? rows.join('') : '<div style="font-size:12px;color:rgba(245,160,174,.3);font-family:monospace;padding:.5rem 0;">no memories yet</div>';
+}
+
+function resetForm(){
+  editingId = null;
+  $('f-name').value = '';
+  $('f-text').value = '';
+  populateConnectDropdown('');
+  selSz(1.8);
+  removePhoto();
+  $('save-btn').textContent = '✦ add to the sky';
+  $('cancel-edit-btn').style.display = 'none';
+  $('form-mode').textContent = 'mode: creating a new memory';
+}
+
+function cancelEdit(){
+  resetForm();
+  setStatus('edit canceled');
+}
+
+function startEdit(id){
+  const row = extras.find(x => String(x.id) === String(id));
+  if (!row) return;
+  editingId = row.id;
+  $('f-name').value = row.name || '';
+  $('f-text').value = row.text || '';
+  populateConnectDropdown(row.connect_to ?? '', row.id);
+  selSz(Number(row.sz ?? 1.8));
+  photo64 = row.photo || null;
+  if (photo64) {
+    $('photo-preview').src = photo64;
+    $('photo-preview').style.display = 'block';
+    $('rm-ph-btn').style.display = 'inline-block';
+  } else {
+    removePhoto();
+  }
+  $('save-btn').textContent = 'save changes';
+  $('cancel-edit-btn').style.display = 'block';
+  $('form-mode').textContent = `mode: editing “${row.name || 'untitled memory'}”`;
+  openTab('create');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function loadMemories(){
+  setStatus('loading…', 'work');
+  try {
+    const [{ data: memRows, error: memErr }, { data: connRows, error: connErr }] = await Promise.all([
+      sb.from('memories').select('id,name,text,photo,sz,connect_to,created_at').order('created_at', { ascending: true }),
+      sb.from('built_in_connections').select('source_idx,target_idx')
+    ]);
+
+    if (memErr) throw memErr;
+    extras = memRows || [];
+    builtinConns = {};
+    if (!connErr && Array.isArray(connRows)) {
+      connRows.forEach(row => {
+        builtinConns[Number(row.source_idx)] = Number(row.target_idx);
       });
     }
 
-    async function connectSupabase() {
-      const url = $('sbUrl').value.trim();
-      const key = $('sbKey').value.trim();
-      const table = $('tableName').value.trim() || 'memories';
+    populateConnectDropdown(editingId ? (extras.find(x => String(x.id) === String(editingId))?.connect_to ?? '') : '', editingId);
+    renderMemoryList();
+    renderBuiltinConnRows();
+    if (!editingId) resetForm();
+    setStatus('ready', 'ok');
+  } catch (err) {
+    console.error(err);
+    setStatus(`load failed: ${err.message || err}`, 'err');
+  }
+}
 
-      if (!url || !key) {
-        setStatus('connectStatus', 'enter the Supabase URL and anon key first', 'err');
-        return;
-      }
+async function saveMemory(){
+  const name = $('f-name').value.trim();
+  const text = $('f-text').value.trim();
+  const connectVal = $('f-connect').value;
 
-      try {
-        supabaseClient = window.supabase.createClient(url, key);
-        const { error } = await supabaseClient.from(table).select('id', { head: true, count: 'exact' });
-        if (error) throw error;
-        setStatus('connectStatus', 'connected', 'ok');
-        await loadMemories();
-      } catch (err) {
-        supabaseClient = null;
-        setStatus('connectStatus', `connection failed: ${err.message || err}`, 'err');
-      }
+  if (!name || !text) {
+    setStatus('name and text are required', 'err');
+    return;
+  }
+
+  const payload = {
+    name,
+    text,
+    photo: photo64 || null,
+    sz: Number(selSzVal || 1.8),
+    connect_to: connectVal === '' ? null : Number(connectVal)
+  };
+
+  setStatus(editingId ? 'saving changes…' : 'adding memory…', 'work');
+  $('save-btn').disabled = true;
+
+  try {
+    if (editingId) {
+      const { error } = await sb.from('memories').update(payload).eq('id', editingId);
+      if (error) throw error;
+      setStatus('memory updated', 'ok');
+    } else {
+      const { error } = await sb.from('memories').insert(payload);
+      if (error) throw error;
+      setStatus('memory added', 'ok');
     }
+    resetForm();
+    await loadMemories();
+    openTab('memories');
+  } catch (err) {
+    console.error(err);
+    setStatus(`save failed: ${err.message || err}`, 'err');
+  } finally {
+    $('save-btn').disabled = false;
+  }
+}
 
-    async function loadMemories() {
-      if (!supabaseClient) {
-        setStatus('connectStatus', 'connect first', 'warn');
-        return;
-      }
-      const table = $('tableName').value.trim() || 'memories';
-      setStatus('connectStatus', 'loading memories...', 'warn');
-      try {
-        const { data, error } = await supabaseClient
-          .from(table)
-          .select('*')
-          .order('created_at', { ascending: true, nullsFirst: true })
-          .order('id', { ascending: true });
-        if (error) throw error;
-        currentRows = data || [];
-        renderList();
-        buildConnectDropdown();
-        setStatus('connectStatus', `loaded ${currentRows.length} memories`, 'ok');
-      } catch (err) {
-        setStatus('connectStatus', `load failed: ${err.message || err}`, 'err');
-      }
+async function deleteMemory(id){
+  const idx = extras.findIndex(x => String(x.id) === String(id));
+  if (idx === -1) return;
+  const globalIdx = BUILTINS.length + idx;
+  const affected = extras
+    .filter(x => String(x.id) !== String(id))
+    .filter(x => x.connect_to !== null && x.connect_to !== undefined && x.connect_to !== '')
+    .map(x => {
+      const current = Number(x.connect_to);
+      if (!Number.isInteger(current)) return null;
+      if (current === globalIdx) return { id: x.id, connect_to: null };
+      if (current > globalIdx) return { id: x.id, connect_to: current - 1 };
+      return null;
+    })
+    .filter(Boolean);
+
+  setStatus('deleting…', 'work');
+  try {
+    const { error: delErr } = await sb.from('memories').delete().eq('id', id);
+    if (delErr) throw delErr;
+    for (const upd of affected) {
+      const { error } = await sb.from('memories').update({ connect_to: upd.connect_to }).eq('id', upd.id);
+      if (error) throw error;
     }
+    if (String(editingId) === String(id)) resetForm();
+    await loadMemories();
+    setStatus('memory deleted', 'ok');
+  } catch (err) {
+    console.error(err);
+    setStatus(`delete failed: ${err.message || err}`, 'err');
+  }
+}
 
-    function buildConnectDropdown() {
-      const select = $('fConnect');
-      const current = select.value;
-      select.innerHTML = '<option value="">— no connection —</option>';
-      currentRows.forEach((row, index) => {
-        const opt = document.createElement('option');
-        opt.value = String(row.id ?? index);
-        opt.textContent = row.name || `memory ${index + 1}`;
-        select.appendChild(opt);
-      });
-      if ([...select.options].some(o => o.value === current)) select.value = current;
+async function saveBuiltinConnections(){
+  const selects = Array.from(document.querySelectorAll('#builtin-conn-rows select'));
+  const rows = selects
+    .map(sel => ({ source_idx: Number(sel.dataset.sourceIdx), target_idx: sel.value === '' ? null : Number(sel.value) }))
+    .filter(row => row.target_idx !== null);
+
+  setConnStatus('saving…');
+  try {
+    const { error: deleteErr } = await sb.from('built_in_connections').delete().gte('source_idx', 0);
+    if (deleteErr) throw deleteErr;
+    if (rows.length) {
+      const { error: insertErr } = await sb.from('built_in_connections').insert(rows);
+      if (insertErr) throw insertErr;
     }
+    setConnStatus('connections saved', 'ok');
+    await loadMemories();
+  } catch (err) {
+    console.error(err);
+    setConnStatus(`save failed: ${err.message || err}`, 'err');
+  }
+}
 
-    function renderList() {
-      const host = $('memoryList');
-      if (!currentRows.length) {
-        host.innerHTML = '<div class="muted">No rows yet.</div>';
-        return;
-      }
+function startAdminLiveSync(){
+  if (_adminChannel) return;
+  _adminChannel = sb
+    .channel('dolcetta-admin-live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'memories' }, () => loadMemories())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'built_in_connections' }, () => loadMemories())
+    .subscribe();
+}
 
-      host.innerHTML = currentRows.map((row, index) => {
-        const connectVal = row.connect_to ?? row.connectTo ?? '';
-        const photo = row.photo || '';
-        return `
-          <div class="memory-item">
-            <div class="memory-head">
-              <div>
-                <div class="memory-name">${escapeHtml(row.name || `memory ${index + 1}`)}</div>
-                <div class="muted">id: ${escapeHtml(String(row.id ?? '—'))}</div>
-              </div>
-              <div class="pill">size ${escapeHtml(String(row.sz ?? 1.8))}</div>
-            </div>
-            <div class="memory-text">${escapeHtml(row.text || '')}</div>
-            <div class="muted">connect_to: ${escapeHtml(String(connectVal || 'none'))}</div>
-            ${photo ? `<img class="thumb" src="${photo}" alt="memory photo">` : ''}
-            <div class="btns" style="margin-top:10px;">
-              <button class="danger" onclick="deleteMemory(${JSON.stringify(row.id)})">delete</button>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    async function saveMemory() {
-      if (!supabaseClient) {
-        setStatus('saveStatus', 'connect to Supabase first', 'err');
-        return;
-      }
-
-      const table = $('tableName').value.trim() || 'memories';
-      const name = $('fName').value.trim();
-      const text = $('fText').value.trim();
-      const sz = Number($('fSize').value || 1.8);
-      const connectRaw = $('fConnect').value;
-
-      if (!name) return setStatus('saveStatus', 'give it a name', 'err');
-      if (!text) return setStatus('saveStatus', 'write something first', 'err');
-
-      setStatus('saveStatus', 'saving...', 'warn');
-      $('saveBtn').disabled = true;
-      try {
-        const payload = {
-          name,
-          text,
-          sz,
-          photo: photoBase64 || null,
-          connect_to: connectRaw === '' ? null : Number(connectRaw)
-        };
-
-        const { error } = await supabaseClient.from(table).insert(payload);
-        if (error) throw error;
-
-        clearForm();
-        await loadMemories();
-        setStatus('saveStatus', 'saved', 'ok');
-      } catch (err) {
-        setStatus('saveStatus', `save failed: ${err.message || err}`, 'err');
-      } finally {
-        $('saveBtn').disabled = false;
-      }
-    }
-
-    async function deleteMemory(id) {
-      if (!supabaseClient) return;
-      if (!confirm('Delete this memory?')) return;
-      const table = $('tableName').value.trim() || 'memories';
-      try {
-        const { error } = await supabaseClient.from(table).delete().eq('id', id);
-        if (error) throw error;
-        await loadMemories();
-      } catch (err) {
-        setStatus('connectStatus', `delete failed: ${err.message || err}`, 'err');
-      }
-    }
-
-    $('fPhoto').addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) {
-        photoBase64 = '';
-        return;
-      }
-      try {
-        photoBase64 = await fileToBase64(file);
-        setStatus('saveStatus', 'photo ready', 'ok');
-      } catch (err) {
-        photoBase64 = '';
-        setStatus('saveStatus', `photo failed: ${err.message || err}`, 'err');
-      }
-    });
-
-    $('connectBtn').addEventListener('click', connectSupabase);
-    $('saveConfigBtn').addEventListener('click', saveConfigLocal);
-    $('clearConfigBtn').addEventListener('click', () => {
-      localStorage.removeItem(CONFIG_KEY);
-      setStatus('connectStatus', 'saved config cleared', 'ok');
-    });
-    $('saveBtn').addEventListener('click', saveMemory);
-    $('resetBtn').addEventListener('click', clearForm);
-    $('reloadBtn').addEventListener('click', loadMemories);
-
-    loadConfigLocal();
-    connectSupabase();
-  </script>
+resetForm();
+</script>
 </body>
 </html>
