@@ -186,6 +186,7 @@ position:relative; min-height:65px; display:flex; align-items:center; justify-co
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const PASS = 'Iyad@002005';
 const OWNER = 'josephcove0';
@@ -194,6 +195,9 @@ const FILE  = 'memories.json';
 const CONN_FILE = 'connections.json';
 const ENC_KEY    = 'dlc_enc';
 const ENC_IV_KEY = 'dlc_iv';
+const SUPABASE_URL = 'https://hlohijsctkfdiyrgmuqp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsb2hpanNjdGtmZGl5cmdtdXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNzE5OTYsImV4cCI6MjA4OTk0Nzk5Nn0.18_gY5ohSwQTRx0-HKdEhe9dvkPzl3SXANLv-EiTwDo';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const BUILTINS = [
   "The Instagram Story","The Airport Text","The Black Hole Talk",
@@ -237,64 +241,35 @@ async function decryptStr(pw){
 async function tryPw(){
   const pw=document.getElementById('pw-in').value;
   if(pw!==PASS){ showMsg('pw-err','wrong password'); document.getElementById('pw-in').value=''; return; }
-  if(localStorage.getItem(ENC_KEY)){
-    const tok=await decryptStr(pw);
-    if(tok){ token=tok; showAdmin(); }
-    else { showMsg('pw-err','decryption failed — try clearing token'); }
-  } else {
-    tmpPw=pw;
-    document.getElementById('s-pw').style.display='none';
-    document.getElementById('s-tok').style.display='flex';
-  }
+  showAdmin();
 }
 async function saveTok(){
-  const t=document.getElementById('tok-in').value.trim();
-  if(!t.startsWith('ghp_')&&!t.startsWith('github_pat_')){ showMsg('tok-err','doesn\'t look like a GitHub token'); return; }
-  try {
-    await encryptStr(t, tmpPw);
-    tmpPw=null; token=t;
-    document.getElementById('tok-ok').textContent='✦ encrypted & saved';
-    setTimeout(showAdmin, 700);
-  } catch(e){ showMsg('tok-err','error: '+e.message); }
+  showAdmin();
 }
+
+let _adminChannel = null;
+
 function showAdmin(){
   document.getElementById('s-pw').style.display='none';
   document.getElementById('s-tok').style.display='none';
   document.getElementById('s-admin').style.display='block';
   loadMemories();
+  startAdminLiveSync();
 }
-function lock() { token=null; location.reload(); }
-function clearTok(){ if(!confirm('Remove saved token from this device?')) return; localStorage.removeItem(ENC_KEY); localStorage.removeItem(ENC_IV_KEY); token=null; location.reload(); }
+function lock() { location.reload(); }
+function clearTok(){ location.reload(); }
 document.getElementById('pw-in').addEventListener('keydown', e=>{ if(e.key==='Enter') tryPw(); });
 document.getElementById('tok-in').addEventListener('keydown', e=>{ if(e.key==='Enter') saveTok(); });
 function showMsg(id, msg){ const el=document.getElementById(id); el.textContent=msg; setTimeout(()=>el.textContent='',3000); }
 
-// ── GITHUB API ───────────────────────────────────────────────────────────────
-async function ghGet(path){
-  const r=await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`,
-    {headers:{Authorization:`token ${token}`,Accept:'application/vnd.github.v3+json'}});
-  if(!r.ok) throw new Error(`GET ${r.status}`);
-  return r.json();
-}
+function startAdminLiveSync(){
+  if (_adminChannel) return;
 
-// Always fetches a fresh SHA immediately before writing — prevents stale-SHA conflicts
-async function ghPut(path, content, msg){
-  // Get the very latest SHA right now
-  let latestSha = null;
-  try {
-    const current = await ghGet(path);
-    latestSha = current.sha;
-  } catch(e) {
-    // File might not exist yet (first write) — that's fine, sha stays null
-  }
-
-  const body = { message: msg, content: btoa(unescape(encodeURIComponent(content))) };
-  if(latestSha) body.sha = latestSha;
-
-  const r=await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`,
-    {method:'PUT', headers:{Authorization:`token ${token}`,Accept:'application/vnd.github.v3+json','Content-Type':'application/json'}, body:JSON.stringify(body)});
-  if(!r.ok){ const e=await r.json(); throw new Error(e.message||`PUT ${r.status}`); }
-  return r.json();
+  _adminChannel = sb
+    .channel('dolcetta-admin-live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'memories' }, () => loadMemories())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'built_in_connections' }, () => loadMemories())
+    .subscribe();
 }
 
 // ── LOAD ─────────────────────────────────────────────────────────────────────
@@ -302,15 +277,41 @@ async function loadMemories(){
   const btn = document.getElementById('refresh-btn');
   if(btn){ btn.textContent='↻ loading...'; btn.disabled=true; }
   try {
-    const d=await ghGet(FILE);
-    extras=JSON.parse(decodeURIComponent(escape(atob(d.content.replace(/\n/g,'')))));
-  } catch{ extras=[]; }
-  try {
-    const d=await ghGet(CONN_FILE);
-    builtinConns=JSON.parse(decodeURIComponent(escape(atob(d.content.replace(/\n/g,'')))));
-  } catch{ builtinConns={}; }
-  renderList(); buildConnectDropdown(); renderBuiltinConnRows();
-  if(btn){ btn.textContent='✦ done'; setTimeout(()=>{ btn.textContent='↻ refresh'; btn.disabled=false; }, 1200); }
+    const [{ data: memRows, error: memErr }, { data: connRows, error: connErr }] = await Promise.all([
+      sb.from('memories')
+        .select('id,name,text,photo,sz,connect_to,created_at')
+        .order('created_at', { ascending: true }),
+      sb.from('built_in_connections')
+        .select('source_idx,target_idx')
+    ]);
+
+    if (memErr) throw memErr;
+    if (connErr) throw connErr;
+
+    extras = (memRows || []).map(row => ({
+      id: row.id,
+      name: row.name,
+      text: row.text,
+      sz: Number(row.sz),
+      ...(row.photo ? { photo: row.photo } : {}),
+      ...(row.connect_to !== null && row.connect_to !== undefined
+        ? { connectTo: Number(row.connect_to) }
+        : {})
+    }));
+
+    builtinConns = Object.fromEntries(
+      (connRows || []).map(row => [Number(row.source_idx), Number(row.target_idx)])
+    );
+
+    renderList();
+    buildConnectDropdown();
+    renderBuiltinConnRows();
+
+    if(btn){ btn.textContent='✦ done'; setTimeout(()=>{ btn.textContent='↻ refresh'; btn.disabled=false; }, 1200); }
+  } catch(e){
+    if(btn){ btn.textContent='↻ refresh'; btn.disabled=false; }
+    st('error: '+e.message,'err');
+  }
 }
 
 function renderList(){
@@ -362,14 +363,21 @@ async function saveBuiltinConnections(){
   document.getElementById('save-conn-btn').disabled = true;
   cst('saving...');
   try {
-    const newConns = {};
+    const rows = [];
     BUILTINS.forEach((_, i) => {
       const v = document.getElementById(`bc-${i}`).value;
-      if (v !== '') newConns[i] = parseInt(v);
+      if (v !== '') rows.push({ source_idx: i, target_idx: Number(v) });
     });
-    const json = JSON.stringify(newConns, null, 2);
-    await ghPut(CONN_FILE, json, 'update builtin connections');
-    builtinConns = newConns;
+
+    const { error: delErr } = await sb.from('built_in_connections').delete().gte('source_idx', 0);
+    if (delErr) throw delErr;
+
+    if (rows.length) {
+      const { error: insErr } = await sb.from('built_in_connections').insert(rows);
+      if (insErr) throw insErr;
+    }
+
+    builtinConns = Object.fromEntries(rows.map(r => [r.source_idx, r.target_idx]));
     await loadMemories();
     cst('✦ saved');
     setTimeout(()=>cst(''), 3000);
