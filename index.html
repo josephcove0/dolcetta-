@@ -735,29 +735,20 @@ function generateStarPositions(data) {
 const MEMORIES = generateStarPositions(MEMORIES_DATA);
 
 const CONFIG_KEY = 'dolcetta_supabase_config_v1';
-const DEFAULT_SUPABASE_URL = 'https://hlohijsctkfdiyrgmuqp.supabase.co';
+const DEFAULT_SUPABASE_URL = 'https://hlohijjsctkfdiyrgmuqp.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsb2hpanNjdGtmZGl5cmdtdXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNzE5OTYsImV4cCI6MjA4OTk0Nzk5Nn0.18_gY5ohSwQTRx0-HKdEhe9dvkPzl3SXANLv-EiTwDo';
 const DEFAULT_SUPABASE_TABLE = 'memories';
+const DEFAULT_CONNECTIONS_TABLE = 'built_in_connections';
 let SUPABASE_URL = DEFAULT_SUPABASE_URL;
 let SUPABASE_ANON_KEY = DEFAULT_SUPABASE_ANON_KEY;
 let SUPABASE_TABLE = DEFAULT_SUPABASE_TABLE;
 let supabaseClient = null;
-const LEGACY_BAD_SUPABASE_URL = 'https://hlohijjsctkfdiyrgmuqp.supabase.co';
-
-function migrateLegacySupabaseConfig(cfg) {
-  if (!cfg || typeof cfg !== 'object') return cfg;
-  if ((cfg.url || '').trim() === LEGACY_BAD_SUPABASE_URL) {
-    cfg.url = DEFAULT_SUPABASE_URL;
-    try { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); } catch (err) {}
-  }
-  return cfg;
-}
 
 function loadSupabaseConfig() {
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
     if (!raw) return;
-    const cfg = migrateLegacySupabaseConfig(JSON.parse(raw) || {});
+    const cfg = JSON.parse(raw) || {};
     SUPABASE_URL = (cfg.url || DEFAULT_SUPABASE_URL).trim();
     SUPABASE_ANON_KEY = (cfg.key || DEFAULT_SUPABASE_ANON_KEY).trim();
     SUPABASE_TABLE = (cfg.table || DEFAULT_SUPABASE_TABLE).trim() || DEFAULT_SUPABASE_TABLE;
@@ -811,6 +802,48 @@ function resolveRemoteConnectionTarget(rawValue, extraIndexMap) {
   }
 
   return undefined;
+}
+
+function resolveBuiltinMemoryIndex(rawValue) {
+  if (rawValue === undefined || rawValue === null || rawValue === '') return undefined;
+  const numericValue = Number(rawValue);
+  if (Number.isInteger(numericValue) && numericValue >= 0 && numericValue < MEMORIES_DATA.length) {
+    return numericValue;
+  }
+  const key = String(rawValue).trim().toLowerCase();
+  if (!key) return undefined;
+  const idx = MEMORIES_DATA.findIndex(m => String(m && m.name || '').trim().toLowerCase() === key);
+  return idx >= 0 ? idx : undefined;
+}
+
+function normalizeBuiltinConnectionRows(rows = []) {
+  const pairs = {};
+  rows.forEach(row => {
+    if (!row || typeof row !== 'object') return;
+    const rawFrom =
+      row.from_idx ?? row.from_index ?? row.from ?? row.from_id ??
+      row.source_idx ?? row.source_index ?? row.source ?? row.source_id ??
+      row.a ?? row.start ?? row.from_name ?? row.source_name ?? row.from_memory;
+    const rawTo =
+      row.to_idx ?? row.to_index ?? row.to ?? row.to_id ??
+      row.target_idx ?? row.target_index ?? row.target ?? row.target_id ??
+      row.b ?? row.end ?? row.to_name ?? row.target_name ?? row.to_memory;
+
+    const fromIdx = resolveBuiltinMemoryIndex(rawFrom);
+    const toIdx = resolveBuiltinMemoryIndex(rawTo);
+    if (fromIdx === undefined || toIdx === undefined || fromIdx === toIdx) return;
+    pairs[fromIdx] = toIdx;
+  });
+  return pairs;
+}
+
+function rememberFreshRemoteRows(rowsOrIds) {
+  const list = Array.isArray(rowsOrIds) ? rowsOrIds : [rowsOrIds];
+  list.forEach(item => {
+    const id = typeof item === 'object' && item !== null ? item.id : item;
+    if (id === undefined || id === null || id === '') return;
+    _pendingRevealRowIds.add(String(id));
+  });
 }
 
 
@@ -2550,7 +2583,9 @@ function startSupabaseRealtime(){
     const client = getSupabaseClient();
     _supabaseLiveChannel = client
       .channel('dolcetta-memories-live')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: SUPABASE_TABLE }, () => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: SUPABASE_TABLE }, payload => {
+        const insertedId = payload?.new?.id;
+        if (insertedId !== undefined && insertedId !== null) rememberFreshRemoteRows(insertedId);
         refreshRemoteMemories(true);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: SUPABASE_TABLE }, () => {
@@ -2581,6 +2616,7 @@ function startCrossTabMemorySync(){
       queueStarDeletionByRowId(msg.id);
       setTimeout(() => refreshRemoteMemories(true), 1100);
     } else if (msg.type === 'memory-added' || msg.type === 'memory-updated') {
+      if (msg.id !== undefined && msg.id !== null) rememberFreshRemoteRows(msg.id);
       refreshRemoteMemories(true);
     }
   });
@@ -2595,6 +2631,8 @@ let _pendingExtra = [], _pendingBuiltinConns = {};
 let _remoteFetchNonce = 0;
 let _sessionInitialExtraCount = null;
 let _sessionBaselineLocked = false;
+let _hasCompletedRemoteBaseline = false;
+const _pendingRevealRowIds = new Set();
 
 async function fetchSupabaseMemories() {
   const client = getSupabaseClient();
@@ -2607,10 +2645,31 @@ async function fetchSupabaseMemories() {
   return (data || []).map(normalizeRemoteMemory);
 }
 
+async function fetchSupabaseBuiltinConnections() {
+  const client = getSupabaseClient();
+  try {
+    const { data, error } = await client
+      .from(DEFAULT_CONNECTIONS_TABLE)
+      .select('*');
+    if (error) throw error;
+    return normalizeBuiltinConnectionRows(data || []);
+  } catch (err) {
+    const msg = String(err && (err.message || err) || '');
+    const missing = /does not exist|Could not find the table|relation .* does not exist|404/i.test(msg);
+    if (!missing) console.warn('Supabase builtin-connections refresh failed:', err);
+    return {};
+  }
+}
+
 async function refreshRemoteMemories(rebuildIfReady = true) {
   const nonce = ++_remoteFetchNonce;
   const prevExtraSig = JSON.stringify(_pendingExtra || []);
   const prevConnSig  = JSON.stringify(_pendingBuiltinConns || {});
+  const prevIds = new Set((_pendingExtra || [])
+    .map(row => row && row.id)
+    .filter(v => v !== null && v !== undefined)
+    .map(v => String(v))
+  );
   const t0 = performance.now();
   if (window._dbg) window._dbg('poll_fire', { nonce });
 
@@ -2619,7 +2678,11 @@ async function refreshRemoteMemories(rebuildIfReady = true) {
   let removedRowIds = [];
 
   try {
-    const fetchedExtra = await fetchSupabaseMemories();
+    const [fetchedExtra, fetchedBuiltinConns] = await Promise.all([
+      fetchSupabaseMemories(),
+      fetchSupabaseBuiltinConnections()
+    ]);
+
     const loadedRemoteIds = new Set(
       MEMORIES.slice(MEMORIES_DATA.length)
         .map(m => m && (m.rowId ?? m.id))
@@ -2633,9 +2696,21 @@ async function refreshRemoteMemories(rebuildIfReady = true) {
     );
     removedRowIds = [...loadedRemoteIds].filter(id => !fetchedIds.has(id));
 
+    const newlySeenRows = fetchedExtra.filter(row => {
+      const id = row && row.id;
+      if (id === null || id === undefined) return false;
+      return !prevIds.has(String(id));
+    });
+
     _pendingExtra = fetchedExtra;
-    _pendingBuiltinConns = {};
+    _pendingBuiltinConns = fetchedBuiltinConns || {};
     extraOk = true;
+    connsOk = true;
+
+    if (_hasCompletedRemoteBaseline) {
+      rememberFreshRemoteRows(newlySeenRows);
+    }
+    _hasCompletedRemoteBaseline = true;
 
     if (!_sessionBaselineLocked) {
       _sessionInitialExtraCount = _pendingExtra.length;
@@ -2706,7 +2781,11 @@ function applyConnectionsAndCluster() {
   const baseline = _sessionInitialExtraCount ?? 0;
   const newlyAddedDuringSession = toAdd
     .map((m, localIdx) => ({ m, localIdx, absoluteExtraIndex: alreadyAdded + localIdx }))
-    .filter(item => item.absoluteExtraIndex >= baseline);
+    .filter(item => {
+      const idKey = item.m && item.m.id != null ? String(item.m.id) : null;
+      if (idKey && _pendingRevealRowIds.has(idKey)) return true;
+      return item.absoluteExtraIndex >= baseline;
+    });
 
   if (toAdd.length > 0) {
     const rng2 = seededRng(2025 + _pendingExtra.length);
@@ -2746,12 +2825,30 @@ function applyConnectionsAndCluster() {
 
       const newSessionIdxs = newlyAddedDuringSession.map(item => ({
         idx: newIdxs[item.localIdx],
-        name: item.m.name || 'untitled memory'
+        name: item.m.name || 'untitled memory',
+        rowId: item.m && item.m.id != null ? String(item.m.id) : null
       }));
 
-      newSessionIdxs.forEach(item => revealNewStarWithPan(item.idx));
-      if (newSessionIdxs.length) pushLiveNotice(newSessionIdxs);
+      newSessionIdxs.forEach(item => {
+        if (item.rowId) _pendingRevealRowIds.delete(item.rowId);
+        revealNewStarWithPan(item.idx);
+      });
+      if (newSessionIdxs.length) pushLiveNotice(newSessionIdxs.map(({ idx, name }) => ({ idx, name })));
     }
+  }
+
+  if (toAdd.length === 0 && _pendingRevealRowIds.size > 0 && typeof scene !== 'undefined' && scene) {
+    const revealNow = [];
+    for (let i = MEMORIES_DATA.length; i < MEMORIES.length; i++) {
+      const rowKey = MEMORIES[i] && (MEMORIES[i].rowId ?? MEMORIES[i].id);
+      if (rowKey == null) continue;
+      const key = String(rowKey);
+      if (!_pendingRevealRowIds.has(key)) continue;
+      revealNow.push({ idx: i, name: MEMORIES[i].name || 'untitled memory', rowId: key });
+      _pendingRevealRowIds.delete(key);
+    }
+    revealNow.forEach(item => revealNewStarWithPan(item.idx));
+    if (revealNow.length) pushLiveNotice(revealNow.map(({ idx, name }) => ({ idx, name })));
   }
 
   // ── Cluster connected chains far from each other ──────────────────────────
