@@ -735,19 +735,29 @@ function generateStarPositions(data) {
 const MEMORIES = generateStarPositions(MEMORIES_DATA);
 
 const CONFIG_KEY = 'dolcetta_supabase_config_v1';
-const DEFAULT_SUPABASE_URL = 'https://hlohijjsctkfdiyrgmuqp.supabase.co';
+const DEFAULT_SUPABASE_URL = 'https://hlohijsctkfdiyrgmuqp.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsb2hpanNjdGtmZGl5cmdtdXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNzE5OTYsImV4cCI6MjA4OTk0Nzk5Nn0.18_gY5ohSwQTRx0-HKdEhe9dvkPzl3SXANLv-EiTwDo';
 const DEFAULT_SUPABASE_TABLE = 'memories';
 let SUPABASE_URL = DEFAULT_SUPABASE_URL;
 let SUPABASE_ANON_KEY = DEFAULT_SUPABASE_ANON_KEY;
 let SUPABASE_TABLE = DEFAULT_SUPABASE_TABLE;
 let supabaseClient = null;
+const LEGACY_BAD_SUPABASE_URL = 'https://hlohijjsctkfdiyrgmuqp.supabase.co';
+
+function migrateLegacySupabaseConfig(cfg) {
+  if (!cfg || typeof cfg !== 'object') return cfg;
+  if ((cfg.url || '').trim() === LEGACY_BAD_SUPABASE_URL) {
+    cfg.url = DEFAULT_SUPABASE_URL;
+    try { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); } catch (err) {}
+  }
+  return cfg;
+}
 
 function loadSupabaseConfig() {
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
     if (!raw) return;
-    const cfg = JSON.parse(raw) || {};
+    const cfg = migrateLegacySupabaseConfig(JSON.parse(raw) || {});
     SUPABASE_URL = (cfg.url || DEFAULT_SUPABASE_URL).trim();
     SUPABASE_ANON_KEY = (cfg.key || DEFAULT_SUPABASE_ANON_KEY).trim();
     SUPABASE_TABLE = (cfg.table || DEFAULT_SUPABASE_TABLE).trim() || DEFAULT_SUPABASE_TABLE;
