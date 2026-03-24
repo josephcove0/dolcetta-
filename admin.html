@@ -258,6 +258,7 @@ function showAdmin(){
 }
 function lock() { location.reload(); }
 function clearTok(){ location.reload(); }
+
 document.getElementById('pw-in').addEventListener('keydown', e=>{ if(e.key==='Enter') tryPw(); });
 document.getElementById('tok-in').addEventListener('keydown', e=>{ if(e.key==='Enter') saveTok(); });
 function showMsg(id, msg){ const el=document.getElementById(id); el.textContent=msg; setTimeout(()=>el.textContent='',3000); }
@@ -437,22 +438,16 @@ async function saveMemory(){
   document.getElementById('save-btn').disabled=true;
   st('saving to the sky...','work');
   try {
-    // Re-fetch the latest memories first to avoid overwriting concurrent changes
-    let latest = [];
-    try {
-      const d = await ghGet(FILE);
-      latest = JSON.parse(decodeURIComponent(escape(atob(d.content.replace(/\n/g,'')))));
-    } catch { latest = [...extras]; }
+    const payload = {
+      name,
+      text,
+      sz: Number(selSzVal),
+      photo: photo64 || null,
+      connect_to: cv !== '' ? Number(cv) : null
+    };
 
-    const m={name,text,sz:selSzVal};
-    if(photo64) m.photo=photo64;
-    if(cv!=='') m.connectTo=parseInt(cv);
-
-    const updated=[...latest, m];
-    const json=JSON.stringify(updated,null,2);
-
-    // ghPut now always fetches fresh SHA internally — no stale SHA possible
-    await ghPut(FILE, json, `add memory: ${name}`);
+    const { error } = await sb.from('memories').insert(payload);
+    if (error) throw error;
 
     await loadMemories();
     document.getElementById('f-name').value='';
@@ -470,16 +465,8 @@ async function delMem(i){
   if(!confirm(`Remove "${extras[i].name}"?`)) return;
   st('removing...','work');
   try {
-    // Re-fetch latest before deleting too
-    let latest = [...extras];
-    try {
-      const d = await ghGet(FILE);
-      latest = JSON.parse(decodeURIComponent(escape(atob(d.content.replace(/\n/g,'')))));
-    } catch {}
-
-    const updated=latest.filter((_,j)=>j!==i);
-    const json=JSON.stringify(updated,null,2);
-    await ghPut(FILE, json, `remove: ${extras[i].name}`);
+    const { error } = await sb.from('memories').delete().eq('id', extras[i].id);
+    if (error) throw error;
     await loadMemories();
     st('removed','ok'); setTimeout(()=>st('',''),2000);
   } catch(e){ st('error: '+e.message,'err'); }
