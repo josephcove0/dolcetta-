@@ -1318,6 +1318,12 @@ function queueStarDeletionByRowId(rowId){
   const key = String(rowId);
   if (removingRowIds.has(key)) return;
 
+  // If the 3-D scene isn't ready yet, retry shortly — the star will still be there.
+  if (typeof scene === 'undefined' || !scene) {
+    setTimeout(() => queueStarDeletionByRowId(rowId), 500);
+    return;
+  }
+
   const idx = findMemoryIndexByRowId(rowId);
   if (idx < 0) return;
 
@@ -2594,9 +2600,14 @@ function startSupabaseRealtime(){
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: SUPABASE_TABLE }, payload => {
         const deletedId = payload?.old?.id;
         if (deletedId !== undefined && deletedId !== null) {
+          // We have the id (requires REPLICA IDENTITY FULL on the table) — animate immediately.
           _pendingExtra = (_pendingExtra || []).filter(row => String(row.id) !== String(deletedId));
           queueStarDeletionByRowId(deletedId);
           setTimeout(() => refreshRemoteMemories(true), 1100);
+        } else {
+          // No id in payload (REPLICA IDENTITY not FULL) — fall back to a refresh
+          // which will diff against the live DB and call queueStarDeletionByRowId itself.
+          refreshRemoteMemories(true);
         }
       })
       .subscribe();

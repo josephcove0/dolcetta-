@@ -559,6 +559,13 @@ async function deleteMemory(id){
       if (error) throw error;
     }
     if (String(editingId) === String(id)) resetForm();
+    // Broadcast deletion to other tabs (e.g. the main sky view) so the
+    // supernova + removal animation fires immediately without waiting for a poll.
+    try {
+      const bus = new BroadcastChannel('dolcetta-memory-live');
+      bus.postMessage({ type: 'memory-deleted', id });
+      bus.close();
+    } catch (_) {}
     await loadMemories();
     setStatus('memory deleted', 'ok');
   } catch (err) {
