@@ -793,15 +793,27 @@ function buildExtraIndexMap(rows) {
 
 function resolveRemoteConnectionTarget(rawValue, extraIndexMap) {
   if (rawValue === undefined || rawValue === null || rawValue === '') return undefined;
+
+  // First try: rawValue is a Supabase row id stored in the map (e.g. "42" -> absIndex 23)
   const asKey = String(rawValue);
   if (extraIndexMap.has(asKey)) return extraIndexMap.get(asKey);
 
   const numericValue = Number(rawValue);
-  if (Number.isInteger(numericValue) && numericValue >= 0 && numericValue < MEMORIES_DATA.length) {
-    return numericValue;
-  }
+  if (!Number.isInteger(numericValue) || numericValue < 0) return undefined;
 
-  return undefined;
+  // Second try: rawValue is a builtin absolute index (0 .. MEMORIES_DATA.length-1)
+  if (numericValue < MEMORIES_DATA.length) return numericValue;
+
+  // Third try: rawValue is an absolute index into the full MEMORIES array including extras.
+  // Admin stores connect_to as the dropdown index which is 0-based across builtins+extras,
+  // so index 19 = first extra, 20 = second extra, etc.
+  // We accept any non-negative integer that could land in MEMORIES once all extras are loaded.
+  // (If the target star hasn't been added yet the line simply won't draw — harmless.)
+  const maxPossible = MEMORIES_DATA.length + extraIndexMap.size;
+  if (numericValue < maxPossible) return numericValue;
+
+  // Fallback: accept it anyway — better to draw a broken line than to silently drop it.
+  return numericValue;
 }
 
 function resolveBuiltinMemoryIndex(rawValue) {
@@ -1963,7 +1975,9 @@ function buildConstellationLines() {
   const seen = new Set();
   MEMORIES.forEach((m, i) => {
     const b = parseInt(m.connectTo);
-    if (!isNaN(b) && b !== i && b >= 0 && b < MEMORIES.length && MEMORIES[b]) {
+    if (!isNaN(b) && b !== i && b >= 0 && b < MEMORIES.length && MEMORIES[b] &&
+        Number.isFinite(MEMORIES[b].phi) && Number.isFinite(MEMORIES[b].theta) &&
+        Number.isFinite(m.phi) && Number.isFinite(m.theta)) {
       const a = i;
       const key = Math.min(a,b) + '-' + Math.max(a,b);
       if (!seen.has(key)) { seen.add(key); pairs.push([a, b]); }
@@ -2790,11 +2804,16 @@ function applyConnectionsAndCluster() {
   });
 
   const baseline = _sessionInitialExtraCount ?? 0;
+  // Only treat an extra as "newly added during this session" if:
+  //   (a) its row id was explicitly registered via rememberFreshRemoteRows (realtime INSERT), OR
+  //   (b) the session baseline has been locked AND its index is beyond it.
+  // Without the baseline-locked guard, a slow initial fetch could make ALL extras look new.
   const newlyAddedDuringSession = toAdd
     .map((m, localIdx) => ({ m, localIdx, absoluteExtraIndex: alreadyAdded + localIdx }))
     .filter(item => {
       const idKey = item.m && item.m.id != null ? String(item.m.id) : null;
       if (idKey && _pendingRevealRowIds.has(idKey)) return true;
+      if (!_sessionBaselineLocked) return false; // baseline not yet set — treat all as existing
       return item.absoluteExtraIndex >= baseline;
     });
 
