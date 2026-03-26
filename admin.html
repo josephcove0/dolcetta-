@@ -138,15 +138,6 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
 #status.ok { color:#5dcaa5; } #status.err { color:#e8526a; } #status.work { color:rgba(245,160,174,.5); }
 
 
-.preview-card { margin-top:1rem; border:1px solid rgba(232,130,145,.22); background:rgba(20,1,8,.88); border-radius:18px; padding:1rem; }
-.preview-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:.8rem; }
-.preview-title { font-size:11px; letter-spacing:1.2px; color:rgba(245,200,210,.7); text-transform:uppercase; }
-.preview-sub { font-size:11px; color:rgba(245,160,174,.55); }
-.preview-actions { display:flex; gap:8px; flex-wrap:wrap; }
-.preview-actions a, .preview-actions button { text-decoration:none; border:1px solid rgba(232,130,145,.22); background:rgba(232,82,106,.08); color:#ffd6dd; border-radius:10px; padding:.45rem .8rem; font-size:12px; font-family:inherit; cursor:pointer; }
-.preview-actions a:hover, .preview-actions button:hover { background:rgba(232,82,106,.18); }
-.preview-frame { width:100%; height:280px; border:1px solid rgba(232,130,145,.18); border-radius:14px; background:#05010b; }
-.preview-note { margin-top:.6rem; font-size:11px; color:rgba(245,160,174,.48); }
 
 @media (max-width:640px){
   #admin-ui { padding:1.3rem 1rem 4rem; }
@@ -156,8 +147,6 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
   .mc { flex-direction:column; }
   .mc-right { width:100%; justify-content:flex-start; }
   .form-actions { flex-direction:column; }
-  .preview-head { flex-direction:column; align-items:flex-start; }
-  .preview-frame { height:220px; }
 }
 
 </style>
@@ -233,9 +222,6 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
           <button id="cancel-edit-btn" onclick="cancelEdit()" type="button">cancel edit</button>
         </div>
         <div id="status"></div>
-        <div class="preview-card">
-          <iframe id="live-preview-frame" class="preview-frame" loading="eager" referrerpolicy="same-origin"></iframe>
-        </div>
       </div>
     </div>
 
@@ -282,8 +268,6 @@ let photo64 = null;
 let selSzVal = 1.8;
 let editingId = null;
 let _adminChannel = null;
-let _previewBus = null;
-let _previewTick = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -297,16 +281,8 @@ function tryPw(){
   $('s-pw').style.display = 'none';
   $('s-admin').style.display = 'block';
   openTab('create');
-  const frame = $('live-preview-frame');
-  if (frame) {
-    frame.removeAttribute('loading');
-    frame.src = './index.html?editor_preview=1&embed_preview=1&v=' + Date.now();
-    frame.addEventListener('load', () => { postPreviewDraft(); }, { once: true });
-  }
   loadMemories();
   startAdminLiveSync();
-  setupPreviewBindings();
-  schedulePreview();
 }
 
 function lock(){ location.reload(); }
@@ -478,88 +454,7 @@ function cancelEdit(){
 }
 
 
-function ensurePreviewBus(){
-  if (_previewBus || !('BroadcastChannel' in window)) return _previewBus;
-  _previewBus = new BroadcastChannel('dolcetta-editor-preview');
-  return _previewBus;
-}
-
-function sendPreviewToFrame(msg){
-  const frame = $('live-preview-frame');
-  if (!frame || !frame.contentWindow) return;
-  try { frame.contentWindow.postMessage(msg, '*'); } catch (_) {}
-}
-
-function currentPreviewPayload(){
-  const connectEl = $('f-connect');
-  return {
-    source: 'admin',
-    name: $('f-name').value.trim() || 'draft memory',
-    text: $('f-text').value.trim() || 'still writing...',
-    photo: photo64 || null,
-    sz: Number(selSzVal || 1.8),
-    connect_to: !connectEl || connectEl.value === '' ? null : Number(connectEl.value)
-  };
-}
-
-function postPreviewDraft(){
-  const payload = currentPreviewPayload();
-  const bus = ensurePreviewBus();
-  if (bus) bus.postMessage({ type: 'preview-draft', payload });
-  sendPreviewToFrame({ type: 'preview-draft', payload });
-}
-
-
-function clearEditorPreview(){
-  const bus = ensurePreviewBus();
-  if (bus) bus.postMessage({ type: 'preview-clear' });
-  sendPreviewToFrame({ type: 'preview-clear' });
-}
-
-function schedulePreview(){
-  clearTimeout(_previewTick);
-  _previewTick = setTimeout(postPreviewDraft, 140);
-}
-
-function setupPreviewBindings(){
-  const ids = ['f-name','f-text','f-connect'];
-  ids.forEach(id => {
-    const el = $(id);
-    if (!el || el.dataset.previewBound === '1') return;
-    el.dataset.previewBound = '1';
-    el.addEventListener('input', schedulePreview);
-    el.addEventListener('change', schedulePreview);
-  });
-  document.querySelectorAll('.sz').forEach(el => {
-    if (el.dataset.previewBound === '1') return;
-    el.dataset.previewBound = '1';
-    el.addEventListener('click', () => setTimeout(schedulePreview, 0));
-  });
-}
-
-function startEdit(id){
-  const row = extras.find(x => String(x.id) === String(id));
-  if (!row) return;
-  editingId = row.id;
-  $('f-name').value = row.name || '';
-  $('f-text').value = row.text || '';
-  populateConnectDropdown(row.connect_to ?? '', row.id);
-  selSz(Number(row.sz ?? 1.8));
-  photo64 = row.photo || null;
-  if (photo64) {
-    $('photo-preview').src = photo64;
-    $('photo-preview').style.display = 'block';
-    $('rm-ph-btn').style.display = 'inline-block';
-  } else {
-    removePhoto();
-  }
-  $('save-btn').textContent = 'save changes';
-  $('cancel-edit-btn').style.display = 'block';
-  $('form-mode').textContent = `mode: editing “${row.name || 'untitled memory'}”`;
-  openTab('create');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  schedulePreview();
-}
+function clearEditorPreview(){}
 
 async function loadMemories(){
   setStatus('loading…', 'work');
