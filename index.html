@@ -743,7 +743,7 @@ const SUPABASE_URL = DEFAULT_SUPABASE_URL;
 const SUPABASE_ANON_KEY = DEFAULT_SUPABASE_ANON_KEY;
 const SUPABASE_TABLE = DEFAULT_SUPABASE_TABLE;
 const PREVIEW_PARAMS = new URLSearchParams(location.search);
-const IS_EDITOR_PREVIEW = PREVIEW_PARAMS.has('editor_preview') || PREVIEW_PARAMS.has('embed_preview');
+const IS_EDITOR_PREVIEW = PREVIEW_PARAMS.has('editor_preview');
 const PREVIEW_BUS_NAME = 'dolcetta-editor-preview';
 let _previewDraftPayload = null;
 let _previewDraftBus = null;
@@ -2048,31 +2048,24 @@ async function bootEditorPreviewSky(){
   window.__previewBooted = true;
   applyEditorPreviewChrome();
   const skyEl = document.getElementById('sky');
-  if (skyEl) skyEl.style.display = 'block';
-  const intro = document.getElementById('intro');
-  if (intro) intro.style.display = 'none';
-  const loading = document.getElementById('loading-screen');
-  if (loading) loading.classList.remove('active');
+  skyEl.style.display = 'block';
   const cvs = document.getElementById('sky-canvas');
-  if (cvs) {
-    const frame = window.frameElement;
-    const rect = frame && frame.getBoundingClientRect ? frame.getBoundingClientRect() : null;
-    const W = Math.max(320, Math.round(rect?.width || window.innerWidth || 900));
-    const H = Math.max(200, Math.round(rect?.height || window.innerHeight || 500));
-    cvs.width = W;
-    cvs.height = H;
-    cvs.style.width = '100%';
-    cvs.style.height = '100%';
+  cvs.width = window.innerWidth;
+  cvs.height = window.innerHeight;
+  cvs.style.width = window.innerWidth + 'px';
+  cvs.style.height = window.innerHeight + 'px';
+  void skyEl.offsetWidth;
+  try {
+    await refreshRemoteMemories(false);
+  } catch (err) {
+    console.warn('Preview memory refresh failed:', err);
   }
   requestAnimationFrame(() => {
-    try {
+    requestAnimationFrame(() => {
       initThree();
       if (_previewDraftPayload) upsertPreviewDraft(_previewDraftPayload);
       applyEditorPreviewChrome();
-      refreshRemoteMemories(true).catch(err => console.warn('Preview memory refresh failed:', err));
-    } catch (err) {
-      console.error('Preview boot failed:', err);
-    }
+    });
   });
 }
 
