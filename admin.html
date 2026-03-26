@@ -244,6 +244,8 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const PASS = 'Iyad@002005';
+const CONFIG_KEY = 'dolcetta_supabase_config_v1';
+try { localStorage.removeItem(CONFIG_KEY); } catch (_) {}
 const SUPABASE_URL = 'https://hlohijsctkfdiyrgmuqp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsb2hpanNjdGtmZGl5cmdtdXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNzE5OTYsImV4cCI6MjA4OTk0Nzk5Nn0.18_gY5ohSwQTRx0-HKdEhe9dvkPzl3SXANLv-EiTwDo';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);

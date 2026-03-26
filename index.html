@@ -739,35 +739,15 @@ const DEFAULT_SUPABASE_URL = 'https://hlohijsctkfdiyrgmuqp.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsb2hpanNjdGtmZGl5cmdtdXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNzE5OTYsImV4cCI6MjA4OTk0Nzk5Nn0.18_gY5ohSwQTRx0-HKdEhe9dvkPzl3SXANLv-EiTwDo';
 const DEFAULT_SUPABASE_TABLE = 'memories';
 const DEFAULT_CONNECTIONS_TABLE = 'built_in_connections';
-let SUPABASE_URL = DEFAULT_SUPABASE_URL;
-let SUPABASE_ANON_KEY = DEFAULT_SUPABASE_ANON_KEY;
-let SUPABASE_TABLE = DEFAULT_SUPABASE_TABLE;
+const SUPABASE_URL = DEFAULT_SUPABASE_URL;
+const SUPABASE_ANON_KEY = DEFAULT_SUPABASE_ANON_KEY;
+const SUPABASE_TABLE = DEFAULT_SUPABASE_TABLE;
 let supabaseClient = null;
 
-function loadSupabaseConfig() {
+function purgeLegacySupabaseConfig() {
   try {
-    const raw = localStorage.getItem(CONFIG_KEY);
-    if (!raw) return;
-    const cfg = JSON.parse(raw) || {};
-    const legacyBadUrl = 'https://hlohijjsctkfdiyrgmuqp.supabase.co';
-    let nextUrl = (cfg.url || DEFAULT_SUPABASE_URL).trim();
-    if (nextUrl === legacyBadUrl) {
-      nextUrl = DEFAULT_SUPABASE_URL;
-      try {
-        localStorage.setItem(CONFIG_KEY, JSON.stringify({
-          ...cfg,
-          url: nextUrl,
-          key: (cfg.key || DEFAULT_SUPABASE_ANON_KEY).trim(),
-          table: (cfg.table || DEFAULT_SUPABASE_TABLE).trim() || DEFAULT_SUPABASE_TABLE
-        }));
-      } catch (_) {}
-    }
-    SUPABASE_URL = nextUrl;
-    SUPABASE_ANON_KEY = (cfg.key || DEFAULT_SUPABASE_ANON_KEY).trim();
-    SUPABASE_TABLE = (cfg.table || DEFAULT_SUPABASE_TABLE).trim() || DEFAULT_SUPABASE_TABLE;
-  } catch (err) {
-    console.warn('Failed to read local Supabase config:', err);
-  }
+    localStorage.removeItem(CONFIG_KEY);
+  } catch (_) {}
 }
 
 function getSupabaseClient() {
@@ -775,7 +755,7 @@ function getSupabaseClient() {
   if (!window.supabase || !window.supabase.createClient) {
     throw new Error('Supabase client failed to load');
   }
-  loadSupabaseConfig();
+  purgeLegacySupabaseConfig();
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   return supabaseClient;
 }
