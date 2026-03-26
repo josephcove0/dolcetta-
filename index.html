@@ -1078,69 +1078,172 @@ let lastTouchTime = 0;
 let modalOpenedAt = 0;
 let newStarAnimations = [];
 let starRemovalAnimations = [];
-let supernovaBursts = [];   // phase 2: spiky burst rays
-let supernovaBloom  = [];   // phase 1: expanding soft light blob
+let supernovaBursts = [];   // irregular breakout spikes + debris shell
+let supernovaBloom  = [];   // soft thermal glow
+let supernovaShocks = [];   // sharp white-blue shock breakout
+let supernovaShells = [];   // warm expanding ejecta shell
+let supernovaEmbers = [];   // drifting filaments / sparks
 let burstTexture = null;
 let bloomTexture = null;
+let shockTexture = null;
+let shellTexture = null;
+let emberTexture = null;
 const removingRowIds = new Set();
 
-// Spiky burst texture (existing)
-function makeSupernovaCanvas(){
-  const dim = 256;
+function buildNoiseRadius(a, phase=0){
+  return 1
+    + 0.18 * Math.sin(a * 3 + phase)
+    + 0.10 * Math.sin(a * 7 - phase * 0.7)
+    + 0.06 * Math.cos(a * 11 + phase * 1.3);
+}
+
+function makeShockBreakoutCanvas(){
+  const dim = 384;
   const c = document.createElement('canvas');
   c.width = dim; c.height = dim;
   const cx = c.getContext('2d');
-  cx.translate(dim/2, dim/2);
+  cx.translate(dim / 2, dim / 2);
 
-  const g = cx.createRadialGradient(0,0,0,0,0,dim*0.45);
+  const g = cx.createRadialGradient(0, 0, 0, 0, 0, dim * 0.36);
   g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.08, 'rgba(255,236,240,.95)');
-  g.addColorStop(0.22, 'rgba(232,130,145,.78)');
-  g.addColorStop(0.5, 'rgba(232,82,106,.18)');
-  g.addColorStop(1, 'rgba(232,82,106,0)');
+  g.addColorStop(0.06, 'rgba(232,248,255,0.98)');
+  g.addColorStop(0.16, 'rgba(170,224,255,0.85)');
+  g.addColorStop(0.34, 'rgba(110,182,255,0.30)');
+  g.addColorStop(0.62, 'rgba(80,120,255,0.06)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
   cx.fillStyle = g;
-  cx.beginPath(); cx.arc(0,0,dim*0.45,0,Math.PI*2); cx.fill();
+  cx.beginPath(); cx.arc(0, 0, dim * 0.34, 0, Math.PI * 2); cx.fill();
 
-  cx.strokeStyle = 'rgba(255,225,235,.78)';
-  cx.lineWidth = 3;
-  cx.shadowColor = 'rgba(232,82,106,.7)';
-  cx.shadowBlur = 18;
-  for(let i=0;i<8;i++){
-    const a = (Math.PI*2/8) * i;
-    const inner = dim*0.08;
-    const outer = dim*(i % 2 === 0 ? 0.42 : 0.28);
+  cx.globalCompositeOperation = 'lighter';
+  for(let i = 0; i < 18; i++){
+    const a = (Math.PI * 2 / 18) * i + (i % 2 ? 0.08 : -0.05);
+    const inner = dim * 0.04;
+    const outer = dim * (0.18 + (i % 3) * 0.06 + (i % 5) * 0.012);
+    cx.strokeStyle = i % 4 === 0 ? 'rgba(255,255,255,0.92)' : 'rgba(185,228,255,0.65)';
+    cx.lineWidth = i % 3 === 0 ? 4 : 2.2;
+    cx.shadowColor = 'rgba(170,220,255,0.9)';
+    cx.shadowBlur = 24;
     cx.beginPath();
-    cx.moveTo(Math.cos(a)*inner, Math.sin(a)*inner);
-    cx.lineTo(Math.cos(a)*outer, Math.sin(a)*outer);
+    cx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
+    cx.lineTo(Math.cos(a) * outer, Math.sin(a) * outer);
     cx.stroke();
   }
 
   cx.shadowBlur = 0;
-  cx.strokeStyle = 'rgba(255,205,220,.4)';
-  cx.lineWidth = 4;
-  cx.beginPath(); cx.arc(0,0,dim*0.25,0,Math.PI*2); cx.stroke();
+  cx.strokeStyle = 'rgba(220,240,255,0.35)';
+  cx.lineWidth = 5;
+  cx.beginPath(); cx.arc(0, 0, dim * 0.12, 0, Math.PI * 2); cx.stroke();
   return c;
 }
 
-// Bloom texture — pure soft radial glow, no spikes, mimics physical light bloom
+function makeSupernovaCanvas(){
+  const dim = 384;
+  const c = document.createElement('canvas');
+  c.width = dim; c.height = dim;
+  const cx = c.getContext('2d');
+  cx.translate(dim / 2, dim / 2);
+
+  cx.globalCompositeOperation = 'lighter';
+  const g = cx.createRadialGradient(0, 0, 0, 0, 0, dim * 0.46);
+  g.addColorStop(0, 'rgba(255,252,245,1)');
+  g.addColorStop(0.08, 'rgba(255,228,190,0.95)');
+  g.addColorStop(0.20, 'rgba(255,170,110,0.84)');
+  g.addColorStop(0.36, 'rgba(255,105,88,0.46)');
+  g.addColorStop(0.62, 'rgba(186,54,88,0.14)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  cx.fillStyle = g;
+  cx.beginPath(); cx.arc(0, 0, dim * 0.30, 0, Math.PI * 2); cx.fill();
+
+  cx.shadowColor = 'rgba(255,126,92,0.8)';
+  cx.shadowBlur = 18;
+  for(let i = 0; i < 14; i++){
+    const a = (Math.PI * 2 / 14) * i + (i % 2 ? 0.16 : -0.09);
+    const outer = dim * (0.20 + (i % 4) * 0.06 + (i === 2 || i === 9 ? 0.12 : 0));
+    const side = dim * 0.05;
+    cx.fillStyle = i % 3 === 0 ? 'rgba(255,241,210,0.9)' : 'rgba(255,160,110,0.72)';
+    cx.beginPath();
+    cx.moveTo(Math.cos(a) * dim * 0.06, Math.sin(a) * dim * 0.06);
+    cx.lineTo(Math.cos(a - 0.09) * outer, Math.sin(a - 0.09) * outer);
+    cx.lineTo(Math.cos(a) * (outer + side), Math.sin(a) * (outer + side));
+    cx.lineTo(Math.cos(a + 0.08) * (outer * 0.78), Math.sin(a + 0.08) * (outer * 0.78));
+    cx.closePath();
+    cx.fill();
+  }
+
+  cx.shadowBlur = 0;
+  cx.strokeStyle = 'rgba(255,214,188,0.28)';
+  cx.lineWidth = 6;
+  cx.beginPath(); cx.arc(0, 0, dim * 0.18, 0, Math.PI * 2); cx.stroke();
+  return c;
+}
+
 function makeBloomCanvas(){
+  const dim = 640;
+  const c = document.createElement('canvas');
+  c.width = dim; c.height = dim;
+  const cx = c.getContext('2d');
+  cx.translate(dim / 2, dim / 2);
+
+  const g = cx.createRadialGradient(0, 0, 0, 0, 0, dim * 0.5);
+  g.addColorStop(0,    'rgba(255,255,255,1)');
+  g.addColorStop(0.03, 'rgba(255,250,236,0.98)');
+  g.addColorStop(0.10, 'rgba(255,232,196,0.92)');
+  g.addColorStop(0.24, 'rgba(255,179,126,0.58)');
+  g.addColorStop(0.44, 'rgba(230,96,104,0.24)');
+  g.addColorStop(0.72, 'rgba(120,34,76,0.08)');
+  g.addColorStop(1,    'rgba(0,0,0,0)');
+  cx.fillStyle = g;
+  cx.beginPath(); cx.arc(0, 0, dim * 0.5, 0, Math.PI * 2); cx.fill();
+  return c;
+}
+
+function makeShellCanvas(){
   const dim = 512;
   const c = document.createElement('canvas');
   c.width = dim; c.height = dim;
   const cx = c.getContext('2d');
-  cx.translate(dim/2, dim/2);
+  cx.translate(dim / 2, dim / 2);
 
-  // Outer warm halo
-  const g2 = cx.createRadialGradient(0,0,0,0,0,dim*0.5);
-  g2.addColorStop(0,    'rgba(255,255,255,1)');
-  g2.addColorStop(0.04, 'rgba(255,252,240,0.98)');
-  g2.addColorStop(0.12, 'rgba(255,235,180,0.88)');
-  g2.addColorStop(0.28, 'rgba(255,180,140,0.55)');
-  g2.addColorStop(0.50, 'rgba(232,100,120,0.22)');
-  g2.addColorStop(0.75, 'rgba(140,40,80,0.07)');
-  g2.addColorStop(1,    'rgba(0,0,0,0)');
-  cx.fillStyle = g2;
-  cx.beginPath(); cx.arc(0,0,dim*0.5,0,Math.PI*2); cx.fill();
+  cx.globalCompositeOperation = 'lighter';
+  for(let layer = 0; layer < 3; layer++){
+    const phase = layer * 0.85;
+    const base = dim * (0.18 + layer * 0.026);
+    cx.beginPath();
+    for(let i = 0; i <= 96; i++){
+      const a = (i / 96) * Math.PI * 2;
+      const r = base * buildNoiseRadius(a, phase) * (layer === 0 ? 1.0 : 0.92 + layer * 0.04);
+      const x = Math.cos(a) * r;
+      const y = Math.sin(a) * r;
+      if(i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+    }
+    cx.closePath();
+    cx.strokeStyle = layer === 0
+      ? 'rgba(255,236,205,0.72)'
+      : layer === 1
+        ? 'rgba(255,154,110,0.46)'
+        : 'rgba(226,72,94,0.22)';
+    cx.lineWidth = layer === 0 ? 10 : layer === 1 ? 14 : 22;
+    cx.shadowColor = layer === 0 ? 'rgba(255,214,170,0.62)' : 'rgba(255,100,96,0.42)';
+    cx.shadowBlur = layer === 0 ? 18 : 24;
+    cx.stroke();
+  }
+  return c;
+}
+
+function makeEmberCanvas(){
+  const dim = 96;
+  const c = document.createElement('canvas');
+  c.width = dim; c.height = dim;
+  const cx = c.getContext('2d');
+  cx.translate(dim / 2, dim / 2);
+  const g = cx.createRadialGradient(0, 0, 0, 0, 0, dim * 0.48);
+  g.addColorStop(0, 'rgba(255,255,255,0.98)');
+  g.addColorStop(0.12, 'rgba(255,220,180,0.95)');
+  g.addColorStop(0.34, 'rgba(255,138,98,0.66)');
+  g.addColorStop(0.72, 'rgba(220,70,92,0.10)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  cx.fillStyle = g;
+  cx.beginPath(); cx.arc(0, 0, dim * 0.48, 0, Math.PI * 2); cx.fill();
   return c;
 }
 
@@ -1151,6 +1254,70 @@ function getSupernovaTexture(){
 function getBloomTexture(){
   if(!bloomTexture) bloomTexture = new THREE.CanvasTexture(makeBloomCanvas());
   return bloomTexture;
+}
+function getShockTexture(){
+  if(!shockTexture) shockTexture = new THREE.CanvasTexture(makeShockBreakoutCanvas());
+  return shockTexture;
+}
+function getShellTexture(){
+  if(!shellTexture) shellTexture = new THREE.CanvasTexture(makeShellCanvas());
+  return shellTexture;
+}
+function getEmberTexture(){
+  if(!emberTexture) emberTexture = new THREE.CanvasTexture(makeEmberCanvas());
+  return emberTexture;
+}
+
+function makeEffectSprite(texture, pos, startScale, renderOrder=8){
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0
+  }));
+  sprite.position.copy(pos);
+  sprite.scale.set(startScale, startScale, 1);
+  sprite.renderOrder = renderOrder;
+  scene.add(sprite);
+  return sprite;
+}
+
+function getExplosionBasis(pos){
+  const normal = pos.clone().normalize();
+  const up = Math.abs(normal.y) > 0.92 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+  const tangentA = new THREE.Vector3().crossVectors(normal, up).normalize();
+  const tangentB = new THREE.Vector3().crossVectors(normal, tangentA).normalize();
+  return { normal, tangentA, tangentB };
+}
+
+function spawnSupernovaEmbers(pos, meta={}, opts={}){
+  const count = opts.count ?? 15;
+  const { normal, tangentA, tangentB } = getExplosionBasis(pos);
+  for(let i = 0; i < count; i++){
+    const a = (Math.PI * 2 * i) / count + (i % 2 ? 0.1 : -0.08);
+    const spread = 0.65 + (i % 4) * 0.12;
+    const outward = tangentA.clone().multiplyScalar(Math.cos(a) * spread)
+      .add(tangentB.clone().multiplyScalar(Math.sin(a) * spread))
+      .add(normal.clone().multiplyScalar((i % 3 === 0 ? 0.18 : 0.08)));
+    outward.normalize();
+    const sprite = makeEffectSprite(getEmberTexture(), pos, 0.18 + (i % 3) * 0.03, 9);
+    sprite.material.opacity = 0;
+    supernovaEmbers.push({
+      sprite,
+      origin: pos.clone(),
+      velocity: outward.multiplyScalar(opts.speed ?? (0.46 + (i % 5) * 0.05)),
+      drift: 0.86 + (i % 4) * 0.03,
+      twist: (i % 2 ? 1 : -1) * (0.28 + (i % 5) * 0.05),
+      start: performance.now() + (opts.delayStep ?? 20) * i,
+      duration: opts.duration ?? (780 + (i % 5) * 85),
+      startScale: 0.14 + (i % 4) * 0.03,
+      endScale: 0.42 + (i % 3) * 0.09,
+      opacityMul: opts.opacityMul ?? 0.72,
+      idx: meta.idx,
+      rowId: meta.rowId
+    });
+  }
 }
 
 function pushLiveNotice(memories) {
@@ -1266,47 +1433,36 @@ function queueNewStarReveal(idx){
   const sp = sprites[idx], rg = rings[idx];
   if(!sp || !rg) return;
 
-  // Star is invisible until phase 3
+  // Hide until the breakout settles.
   sp.userData.reveal = 0; rg.userData.reveal = 0;
   sp.material.opacity = 0; rg.material.opacity = 0;
 
   const pos = sp.position.clone();
   const now = performance.now();
 
-  // ── Phase 1: Bloom (soft expanding light, 0–700ms) ───────────────────────
-  const bloom = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: getBloomTexture(),
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    opacity: 0
-  }));
-  bloom.position.copy(pos);
-  bloom.scale.set(0.1, 0.1, 1);
-  bloom.renderOrder = 7;
-  scene.add(bloom);
-  supernovaBloom.push({ sprite: bloom, idx, start: now, duration: 1800, maxScale: 7.2, opacityMul: 0.98 });
+  const shock = makeEffectSprite(getShockTexture(), pos, 0.12, 10);
+  supernovaShocks.push({ sprite: shock, idx, start: now, duration: 320, maxScale: 5.8, opacityMul: 1.08 });
 
-  // ── Phase 2: Spiky burst (starts at 400ms, 400–1800ms) ───────────────────
-  setTimeout(() => {
-    const burst = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: getSupernovaTexture(),
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      opacity: 0
-    }));
-    burst.position.copy(pos);
-    burst.scale.set(0.15, 0.15, 1);
-    burst.renderOrder = 8;
-    scene.add(burst);
-    supernovaBursts.push({ sprite: burst, idx, start: performance.now(), duration: 1400, maxScale: 4.8, opacityMul: 1.0 });
-  }, 400);
+  const bloom = makeEffectSprite(getBloomTexture(), pos, 0.10, 7);
+  supernovaBloom.push({ sprite: bloom, idx, start: now, duration: 1900, maxScale: 9.2, opacityMul: 0.84 });
 
-  // ── Phase 3: Star fades in (starts at 1100ms) ────────────────────────────
+  spawnSupernovaEmbers(pos, { idx }, { count: 16, speed: 0.58, duration: 980, opacityMul: 0.76, delayStep: 18 });
+
   setTimeout(() => {
-    newStarAnimations.push({ idx, start: performance.now(), duration: 1200 });
-  }, 1100);
+    const shell = makeEffectSprite(getShellTexture(), pos, 0.16, 8);
+    shell.material.rotation = Math.PI * 0.08;
+    supernovaShells.push({ sprite: shell, idx, start: performance.now(), duration: 1700, maxScale: 8.6, opacityMul: 0.78, rotSpeed: 0.55 });
+  }, 120);
+
+  setTimeout(() => {
+    const burst = makeEffectSprite(getSupernovaTexture(), pos, 0.18, 9);
+    burst.material.rotation = -Math.PI * 0.06;
+    supernovaBursts.push({ sprite: burst, idx, start: performance.now(), duration: 1280, maxScale: 6.2, opacityMul: 0.96, rotSpeed: -0.75 });
+  }, 90);
+
+  setTimeout(() => {
+    newStarAnimations.push({ idx, start: performance.now(), duration: 1300 });
+  }, 880);
 }
 
 function findMemoryIndexByRowId(rowId){
@@ -1323,7 +1479,6 @@ function queueStarDeletionByRowId(rowId){
   const key = String(rowId);
   if (removingRowIds.has(key)) return;
 
-  // If the 3-D scene isn't ready yet, retry shortly — the star will still be there.
   if (typeof scene === 'undefined' || !scene) {
     setTimeout(() => queueStarDeletionByRowId(rowId), 500);
     return;
@@ -1342,38 +1497,31 @@ function queueStarDeletionByRowId(rowId){
   const pos = sp.position.clone();
   const now = performance.now();
 
-  const bloom = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: getBloomTexture(),
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    opacity: 0
-  }));
-  bloom.position.copy(pos);
-  bloom.scale.set(0.12, 0.12, 1);
-  bloom.renderOrder = 7;
-  scene.add(bloom);
-  supernovaBloom.push({ sprite: bloom, idx, rowId, start: now, duration: 1500, maxScale: 8.8, opacityMul: 1.0 });
+  const shock = makeEffectSprite(getShockTexture(), pos, 0.14, 10);
+  supernovaShocks.push({ sprite: shock, idx, rowId, start: now, duration: 280, maxScale: 5.0, opacityMul: 0.92 });
+
+  const bloom = makeEffectSprite(getBloomTexture(), pos, 0.12, 7);
+  supernovaBloom.push({ sprite: bloom, idx, rowId, start: now, duration: 1650, maxScale: 10.2, opacityMul: 0.90 });
+
+  spawnSupernovaEmbers(pos, { idx, rowId }, { count: 14, speed: 0.54, duration: 900, opacityMul: 0.70, delayStep: 14 });
 
   setTimeout(() => {
     const liveIdx = findMemoryIndexByRowId(rowId);
     const liveSp = liveIdx >= 0 ? sprites[liveIdx] : null;
-    const burst = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: getSupernovaTexture(),
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      opacity: 0
-    }));
-    if (liveSp) burst.position.copy(liveSp.position);
-    else burst.position.copy(pos);
-    burst.scale.set(0.2, 0.2, 1);
-    burst.renderOrder = 8;
-    scene.add(burst);
-    supernovaBursts.push({ sprite: burst, idx: liveIdx >= 0 ? liveIdx : idx, rowId, start: performance.now(), duration: 1200, maxScale: 5.8, opacityMul: 1.05 });
-  }, 140);
+    const burst = makeEffectSprite(getSupernovaTexture(), liveSp ? liveSp.position : pos, 0.22, 9);
+    burst.material.rotation = Math.PI * 0.12;
+    supernovaBursts.push({ sprite: burst, idx: liveIdx >= 0 ? liveIdx : idx, rowId, start: performance.now(), duration: 1150, maxScale: 6.7, opacityMul: 0.98, rotSpeed: 0.88 });
+  }, 120);
 
-  starRemovalAnimations.push({ rowId, start: now + 80, duration: 760 });
+  setTimeout(() => {
+    const liveIdx = findMemoryIndexByRowId(rowId);
+    const liveSp = liveIdx >= 0 ? sprites[liveIdx] : null;
+    const shell = makeEffectSprite(getShellTexture(), liveSp ? liveSp.position : pos, 0.18, 8);
+    shell.material.rotation = -Math.PI * 0.05;
+    supernovaShells.push({ sprite: shell, idx: liveIdx >= 0 ? liveIdx : idx, rowId, start: performance.now(), duration: 1400, maxScale: 9.4, opacityMul: 0.74, rotSpeed: -0.62 });
+  }, 160);
+
+  starRemovalAnimations.push({ rowId, start: now + 70, duration: 760 });
   setTimeout(() => finalizeStarRemovalByRowId(rowId), 980);
 }
 
@@ -1504,46 +1652,102 @@ function updateNewStarAnimations(now){
     }
   }
 
+  for(let i = supernovaShocks.length - 1; i >= 0; i--){
+    const s = supernovaShocks[i];
+    const p = Math.min(1, Math.max(0, (now - s.start) / s.duration));
+    const liveIdx = s.rowId != null ? findMemoryIndexByRowId(s.rowId) : s.idx;
+    const sp = liveIdx >= 0 ? sprites[liveIdx] : sprites[s.idx];
+    if(sp) s.sprite.position.copy(sp.position);
+    const scale = 0.14 + (1 - Math.pow(1 - p, 2)) * (s.maxScale ?? 5.2);
+    const fade = p < 0.18 ? 1 : Math.pow(1 - ((p - 0.18) / 0.82), 2.4);
+    s.sprite.scale.set(scale, scale, 1);
+    s.sprite.material.opacity = Math.max(0, fade) * (s.opacityMul ?? 1.0);
+    if(p >= 1){
+      scene.remove(s.sprite); s.sprite.material.dispose();
+      supernovaShocks.splice(i,1);
+    }
+  }
+
+  for(let i = supernovaShells.length - 1; i >= 0; i--){
+    const s = supernovaShells[i];
+    const p = Math.min(1, Math.max(0, (now - s.start) / s.duration));
+    const liveIdx = s.rowId != null ? findMemoryIndexByRowId(s.rowId) : s.idx;
+    const sp = liveIdx >= 0 ? sprites[liveIdx] : sprites[s.idx];
+    if(sp) s.sprite.position.copy(sp.position);
+    const ease = 1 - Math.pow(1 - p, 2.2);
+    const scale = 0.14 + ease * (s.maxScale ?? 8.2);
+    const fade = p < 0.12 ? (p / 0.12) * 0.9 : Math.pow(1 - ((p - 0.12) / 0.88), 1.45);
+    s.sprite.scale.set(scale, scale, 1);
+    s.sprite.material.opacity = Math.max(0, fade) * (s.opacityMul ?? 0.7);
+    s.sprite.material.rotation += (s.rotSpeed ?? 0.3) * 0.0025;
+    if(p >= 1){
+      scene.remove(s.sprite); s.sprite.material.dispose();
+      supernovaShells.splice(i,1);
+    }
+  }
+
   for(let i = supernovaBursts.length - 1; i >= 0; i--){
     const b = supernovaBursts[i];
-    const p = Math.min(1, (now - b.start) / b.duration);
-    const easeOut = 1 - Math.pow(1 - p, 3);
-    const scale = 0.18 + easeOut * (b.maxScale ?? 4.8);
-    const fade  = Math.pow(1 - p, 2);
+    const p = Math.min(1, Math.max(0, (now - b.start) / b.duration));
+    const easeOut = 1 - Math.pow(1 - p, 2.8);
+    const scale = 0.18 + easeOut * (b.maxScale ?? 5.4);
+    const fade  = p < 0.15 ? 1 : Math.pow(1 - ((p - 0.15) / 0.85), 1.8);
     const liveIdx = b.rowId != null ? findMemoryIndexByRowId(b.rowId) : b.idx;
     const sp = liveIdx >= 0 ? sprites[liveIdx] : sprites[b.idx];
     if(sp) b.sprite.position.copy(sp.position);
     b.sprite.scale.set(scale, scale, 1);
-    b.sprite.material.opacity = fade * (b.opacityMul ?? 0.92);
+    b.sprite.material.opacity = Math.max(0, fade) * (b.opacityMul ?? 0.92);
+    b.sprite.material.rotation += (b.rotSpeed ?? 0) * 0.0026;
     if(p >= 1){
       scene.remove(b.sprite); b.sprite.material.dispose();
       supernovaBursts.splice(i,1);
     }
   }
 
-  // Phase 1 bloom update
+  for(let i = supernovaEmbers.length - 1; i >= 0; i--){
+    const e = supernovaEmbers[i];
+    const pRaw = (now - e.start) / e.duration;
+    if(pRaw < 0) continue;
+    const p = Math.min(1, pRaw);
+    const travel = 1 - Math.pow(1 - p, 1.4);
+    const drag = 1 - Math.pow(p, e.drift ?? 0.9) * 0.35;
+    const offset = e.velocity.clone().multiplyScalar(travel * drag);
+    const swirl = new THREE.Vector3(-e.velocity.z, e.velocity.y * 0.15, e.velocity.x)
+      .normalize()
+      .multiplyScalar((e.twist ?? 0.2) * Math.sin(p * Math.PI));
+    e.sprite.position.copy(e.origin).add(offset).add(swirl);
+    const scale = (e.startScale ?? 0.18) + (e.endScale ?? 0.5) * p;
+    const fade = p < 0.12 ? p / 0.12 : Math.pow(1 - ((p - 0.12) / 0.88), 1.65);
+    e.sprite.scale.set(scale, scale, 1);
+    e.sprite.material.opacity = Math.max(0, fade) * (e.opacityMul ?? 0.72);
+    if(p >= 1){
+      scene.remove(e.sprite); e.sprite.material.dispose();
+      supernovaEmbers.splice(i,1);
+    }
+  }
+
   for(let i = supernovaBloom.length - 1; i >= 0; i--){
     const b = supernovaBloom[i];
-    const p = Math.min(1, (now - b.start) / b.duration);
+    const p = Math.min(1, Math.max(0, (now - b.start) / b.duration));
     const liveIdx = b.rowId != null ? findMemoryIndexByRowId(b.rowId) : b.idx;
     const sp = liveIdx >= 0 ? sprites[liveIdx] : sprites[b.idx];
     if(sp) b.sprite.position.copy(sp.position);
 
     let opacity;
-    if(p < 0.05){
-      opacity = p / 0.05;
-    } else if(p < 0.20){
+    if(p < 0.04){
+      opacity = p / 0.04;
+    } else if(p < 0.16){
       opacity = 1.0;
     } else {
-      const dp = (p - 0.20) / 0.80;
-      opacity = Math.pow(1 - dp, 1.6);
+      const dp = (p - 0.16) / 0.84;
+      opacity = Math.pow(1 - dp, 1.55);
     }
 
-    const expandEase = 1 - Math.pow(1 - Math.min(p / 0.35, 1), 2);
-    const scale = 0.06 + expandEase * (b.maxScale ?? 5.5);
+    const expandEase = 1 - Math.pow(1 - Math.min(p / 0.42, 1), 2);
+    const scale = 0.08 + expandEase * (b.maxScale ?? 6.6);
 
     b.sprite.scale.set(scale, scale, 1);
-    b.sprite.material.opacity = opacity * (b.opacityMul ?? 0.88);
+    b.sprite.material.opacity = Math.max(0, opacity) * (b.opacityMul ?? 0.84);
 
     if(p >= 1){
       scene.remove(b.sprite); b.sprite.material.dispose();
@@ -3147,7 +3351,11 @@ function applyConnectionsAndCluster() {
     // Scene
     const sceneOk  = typeof scene   !== 'undefined' && !!scene;
     const spriteC  = typeof sprites !== 'undefined' ? Object.keys(sprites).length : 0;
-    const burstC   = typeof supernovaBursts !== 'undefined' ? supernovaBursts.length : 0;
+    const burstC   = (typeof supernovaBursts !== 'undefined' ? supernovaBursts.length : 0)
+      + (typeof supernovaShocks !== 'undefined' ? supernovaShocks.length : 0)
+      + (typeof supernovaShells !== 'undefined' ? supernovaShells.length : 0)
+      + (typeof supernovaBloom !== 'undefined' ? supernovaBloom.length : 0)
+      + (typeof supernovaEmbers !== 'undefined' ? supernovaEmbers.length : 0);
     const noticeC  = document.querySelectorAll('.live-notice').length;
     set('dbg-scene-ready', sceneOk ? 'yes ✓' : 'not yet', sceneOk ? 'green' : 'yellow');
     set('dbg-sprites',     spriteC, spriteC > 0 ? 'green' : 'dim');
