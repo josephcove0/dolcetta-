@@ -743,7 +743,7 @@ const SUPABASE_URL = DEFAULT_SUPABASE_URL;
 const SUPABASE_ANON_KEY = DEFAULT_SUPABASE_ANON_KEY;
 const SUPABASE_TABLE = DEFAULT_SUPABASE_TABLE;
 const PREVIEW_PARAMS = new URLSearchParams(location.search);
-const IS_EDITOR_PREVIEW = PREVIEW_PARAMS.has('editor_preview');
+const IS_EDITOR_PREVIEW = PREVIEW_PARAMS.has('editor_preview') || PREVIEW_PARAMS.has('embed_preview');
 const PREVIEW_BUS_NAME = 'dolcetta-editor-preview';
 let _previewDraftPayload = null;
 let _previewDraftBus = null;
@@ -2031,16 +2031,32 @@ function initEditorPreviewTransport(){
 function applyEditorPreviewChrome(){
   if (!IS_EDITOR_PREVIEW) return;
   document.body.classList.add('editor-preview-mode');
+  document.documentElement.classList.add('editor-preview-mode');
   ['hud','live-notices','toast','music-controls','star-tooltip','modal-wrap','journal-wrap','finale','cursor-glow','loading-screen','intro'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
+    if (el) {
+      el.style.display = 'none';
+      el.setAttribute('aria-hidden', 'true');
+    }
   });
+  const intro = document.getElementById('intro');
+  if (intro) {
+    intro.classList.add('fade');
+    intro.style.display = 'none';
+    intro.style.opacity = '0';
+    intro.style.pointerEvents = 'none';
+    intro.style.visibility = 'hidden';
+  }
   const loader = document.getElementById('loader');
   if (loader) loader.style.display = 'none';
   const debugPanel = document.getElementById('debug-panel');
   if (debugPanel) debugPanel.style.display = 'none';
   const sky = document.getElementById('sky');
-  if (sky) sky.style.display = 'block';
+  if (sky) {
+    sky.style.display = 'block';
+    sky.style.visibility = 'visible';
+    sky.style.opacity = '1';
+  }
 }
 
 async function bootEditorPreviewSky(){
@@ -2048,23 +2064,21 @@ async function bootEditorPreviewSky(){
   window.__previewBooted = true;
   applyEditorPreviewChrome();
   const skyEl = document.getElementById('sky');
-  skyEl.style.display = 'block';
+  if (skyEl) skyEl.style.display = 'block';
   const cvs = document.getElementById('sky-canvas');
-  cvs.width = window.innerWidth;
-  cvs.height = window.innerHeight;
-  cvs.style.width = window.innerWidth + 'px';
-  cvs.style.height = window.innerHeight + 'px';
-  void skyEl.offsetWidth;
-  try {
-    await refreshRemoteMemories(false);
-  } catch (err) {
-    console.warn('Preview memory refresh failed:', err);
+  if (cvs) {
+    cvs.width = window.innerWidth;
+    cvs.height = window.innerHeight;
+    cvs.style.width = window.innerWidth + 'px';
+    cvs.style.height = window.innerHeight + 'px';
   }
+  if (skyEl) void skyEl.offsetWidth;
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       initThree();
       if (_previewDraftPayload) upsertPreviewDraft(_previewDraftPayload);
       applyEditorPreviewChrome();
+      refreshRemoteMemories(false).catch(err => console.warn('Preview memory refresh failed:', err));
     });
   });
 }

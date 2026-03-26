@@ -138,14 +138,15 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
 #status.ok { color:#5dcaa5; } #status.err { color:#e8526a; } #status.work { color:rgba(245,160,174,.5); }
 
 
-.preview-card { margin-top:1rem; border:none; background:transparent; border-radius:0; padding:0; }
-.preview-head { display:none; }
-.preview-title { display:none; }
-.preview-sub { display:none; }
-.preview-actions { display:none; }
-.preview-actions a, .preview-actions button { display:none; }
-.preview-frame { width:100%; height:280px; border:none; border-radius:14px; background:#05010b; display:block; }
-.preview-note { display:none; }
+.preview-card { margin-top:1rem; border:1px solid rgba(232,130,145,.22); background:rgba(20,1,8,.88); border-radius:18px; padding:1rem; }
+.preview-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:.8rem; }
+.preview-title { font-size:11px; letter-spacing:1.2px; color:rgba(245,200,210,.7); text-transform:uppercase; }
+.preview-sub { font-size:11px; color:rgba(245,160,174,.55); }
+.preview-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.preview-actions a, .preview-actions button { text-decoration:none; border:1px solid rgba(232,130,145,.22); background:rgba(232,82,106,.08); color:#ffd6dd; border-radius:10px; padding:.45rem .8rem; font-size:12px; font-family:inherit; cursor:pointer; }
+.preview-actions a:hover, .preview-actions button:hover { background:rgba(232,82,106,.18); }
+.preview-frame { width:100%; height:280px; border:1px solid rgba(232,130,145,.18); border-radius:14px; background:#05010b; }
+.preview-note { margin-top:.6rem; font-size:11px; color:rgba(245,160,174,.48); }
 
 @media (max-width:640px){
   #admin-ui { padding:1.3rem 1rem 4rem; }
@@ -165,7 +166,7 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
 
 <div id="s-pw" class="centered">
   <div class="auth-box">
-    <h2>✦ luji's memory room</h2>
+    <h2>✦ dolcetta admin</h2>
     <p>enter your password</p>
     <input type="password" id="pw-in" placeholder="password" autocomplete="current-password">
     <button class="main-btn" onclick="tryPw()">continue</button>
@@ -176,9 +177,9 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
 <div id="s-admin" style="display:none;">
   <div id="admin-ui">
     <div class="admin-header">
-      <h1>✦ luji's memories</h1>
+      <h1>✦ luji memories</h1>
       <div class="hdr-links">
-        <a href="./index.html" target="_blank">↗ open full sky</a>
+        <a href="./index.html" target="_blank">↗ open sky</a>
         <button onclick="lock()">lock</button>
       </div>
     </div>
@@ -191,15 +192,15 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
 
     <div id="tab-create" class="tab-panel active">
       <div id="add-form">
-        <h3>create a memory</h3>
-        <div id="form-mode">mode: creating a new star</div>
+        <h3>memory form</h3>
+        <div id="form-mode">mode: creating a memory</div>
         <div class="field">
           <label>name</label>
           <input type="text" id="f-name" placeholder="e.g. The Rooftop Night">
         </div>
         <div class="field">
           <label>text</label>
-          <textarea id="f-text" placeholder="what happened, how it felt, why this one matters..."></textarea>
+          <textarea id="f-text" placeholder="what happened, how it felt, why it matters..."></textarea>
         </div>
         <div class="field">
           <label>photo <span style="opacity:.38">(optional)</span></label>
@@ -212,13 +213,6 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
           <button class="rm-photo" id="rm-ph-btn" onclick="removePhoto()" type="button">✕ remove photo</button>
         </div>
         <div class="field">
-          <label>connect to <span style="opacity:.38">(optional)</span></label>
-          <select id="f-connect">
-            <option value="">— no connection —</option>
-          </select>
-          <div class="field-hint">optional: link this memory to another star so they stay together in the sky.</div>
-        </div>
-        <div class="field">
           <label>star size</label>
           <div class="size-opts">
             <div class="sz" onclick="selSz(1.5)" data-sz="1.5">small</div>
@@ -227,7 +221,7 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
           </div>
         </div>
         <div class="form-actions">
-          <button id="save-btn" onclick="saveMemory()">✦ place in the sky</button>
+          <button id="save-btn" onclick="saveMemory()">✦ save memory</button>
           <button id="cancel-edit-btn" onclick="cancelEdit()" type="button">cancel edit</button>
         </div>
         <div id="status"></div>
@@ -239,10 +233,11 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
 
     <div id="tab-memories" class="tab-panel">
       <div class="panel-card">
-        <div class="sec-title">your memories</div>
+        <div class="sec-title">all memories</div>
         <div id="memory-list"><div style="font-size:12px;color:rgba(245,160,174,.3);font-family:monospace;padding:.5rem 0;">loading...</div></div>
       </div>
     </div>
+
   </div>
 </div>
 
@@ -288,7 +283,7 @@ function tryPw(){
   const frame = $('live-preview-frame');
   if (frame) {
     frame.removeAttribute('loading');
-    frame.src = './index.html?embed_preview=1&v=' + Date.now();
+    frame.src = './index.html?editor_preview=1&v=' + Date.now();
     frame.addEventListener('load', () => { postPreviewDraft(); }, { once: true });
   }
   loadMemories();
@@ -302,6 +297,7 @@ $('pw-in').addEventListener('keydown', e => { if (e.key === 'Enter') tryPw(); })
 
 function showPwErr(msg){ $('pw-err').textContent = msg || ''; }
 function setStatus(msg, kind=''){ const el = $('status'); el.className = kind ? kind : ''; el.textContent = msg || ''; }
+function setConnStatus(msg, kind=''){ const el = $('conn-status'); el.style.color = kind === 'err' ? '#e8526a' : kind === 'ok' ? '#5dcaa5' : 'rgba(245,200,210,.5)'; el.textContent = msg || ''; }
 
 function openTab(tabName){
   document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
@@ -379,9 +375,44 @@ function populateConnectDropdown(currentConnect = '', excludeExtraId = null){
   sel.value = currentConnect === null || currentConnect === undefined || currentConnect === '' ? '' : String(currentConnect);
 }
 
+function renderBuiltinConnRows(){
+  const wrap = $('builtin-conn-rows');
+  const options = ['<option value="">— none —</option>'];
+  BUILTINS.forEach((name, idx) => options.push(`<option value="${idx}">${escapeHtml(name)}</option>`));
+  wrap.innerHTML = BUILTINS.map((name, idx) => `
+    <div class="conn-row">
+      <div class="conn-name">${escapeHtml(name)}</div>
+      <select data-source-idx="${idx}">
+        ${options.join('')}
+      </select>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('select').forEach(sel => {
+    const sourceIdx = Number(sel.dataset.sourceIdx);
+    sel.value = builtinConns[sourceIdx] === undefined ? '' : String(builtinConns[sourceIdx]);
+  });
+}
+
 function renderMemoryList(){
   const list = $('memory-list');
   const rows = [];
+
+  BUILTINS.forEach((name, idx) => {
+    const target = builtinConns[idx];
+    rows.push(`
+      <div class="mc builtin">
+        <div class="mc-info">
+          <div class="mc-name">${escapeHtml(name)}</div>
+          <div class="mc-prev">built-in memory${target !== undefined ? ` · connects to ${escapeHtml(BUILTINS[target] || ('#' + target))}` : ''}</div>
+        </div>
+        <div class="mc-right">
+          <span class="tag tag-bi">BUILT-IN</span>
+          ${target !== undefined ? '<span class="tag tag-link">LINKED</span>' : ''}
+        </div>
+      </div>
+    `);
+  });
+
   extras.forEach((row, extraIdx) => {
     const globalIdx = BUILTINS.length + extraIdx;
     const prev = row.text ? escapeHtml(row.text).replace(/\n/g, ' ') : '';
@@ -416,7 +447,7 @@ function resetForm(){
   removePhoto();
   $('save-btn').textContent = '✦ add to the sky';
   $('cancel-edit-btn').style.display = 'none';
-  $('form-mode').textContent = 'mode: creating a new star';
+  $('form-mode').textContent = 'mode: creating a new memory';
   schedulePreview();
 }
 
@@ -509,15 +540,26 @@ function startEdit(id){
   schedulePreview();
 }
 
-
 async function loadMemories(){
   setStatus('loading…', 'work');
   try {
-    const { data: memRows, error: memErr } = await sb.from('memories').select('id,name,text,photo,sz,connect_to,created_at').order('created_at', { ascending: true });
+    const [{ data: memRows, error: memErr }, { data: connRows, error: connErr }] = await Promise.all([
+      sb.from('memories').select('id,name,text,photo,sz,connect_to,created_at').order('created_at', { ascending: true }),
+      sb.from('built_in_connections').select('source_idx,target_idx')
+    ]);
+
     if (memErr) throw memErr;
     extras = memRows || [];
+    builtinConns = {};
+    if (!connErr && Array.isArray(connRows)) {
+      connRows.forEach(row => {
+        builtinConns[Number(row.source_idx)] = Number(row.target_idx);
+      });
+    }
+
     populateConnectDropdown(editingId ? (extras.find(x => String(x.id) === String(editingId))?.connect_to ?? '') : '', editingId);
     renderMemoryList();
+    renderBuiltinConnRows();
     if (!editingId) resetForm();
     setStatus('ready', 'ok');
   } catch (err) {
@@ -619,12 +661,39 @@ async function deleteMemory(id){
   }
 }
 
+async function saveBuiltinConnections(){
+  const selects = Array.from(document.querySelectorAll('#builtin-conn-rows select'));
+  const rows = selects
+    .map(sel => ({ source_idx: Number(sel.dataset.sourceIdx), target_idx: sel.value === '' ? null : Number(sel.value) }))
+    .filter(row => row.target_idx !== null);
+
+  setConnStatus('saving…');
+  try {
+    const { error: deleteErr } = await sb.from('built_in_connections').delete().gte('source_idx', 0);
+    if (deleteErr) throw deleteErr;
+    if (rows.length) {
+      const { error: insertErr } = await sb.from('built_in_connections').insert(rows);
+      if (insertErr) throw insertErr;
+    }
+    try {
+      const bus = new BroadcastChannel('dolcetta-memory-live');
+      bus.postMessage({ type: 'connections-updated' });
+      bus.close();
+    } catch (_) {}
+    setConnStatus('connections saved', 'ok');
+    await loadMemories();
+  } catch (err) {
+    console.error(err);
+    setConnStatus(`save failed: ${err.message || err}`, 'err');
+  }
+}
 
 function startAdminLiveSync(){
   if (_adminChannel) return;
   _adminChannel = sb
     .channel('dolcetta-admin-live')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'memories' }, () => loadMemories())
+    
     .subscribe();
 }
 
