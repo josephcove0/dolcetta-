@@ -4,24 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>For my Dolcetta ✦</title>
-<script>
-(function(){
-  try {
-    var p = new URLSearchParams(location.search);
-    if (p.has('editor_preview') || p.has('embed_preview')) {
-      document.documentElement.classList.add('editor-preview-boot');
-    }
-  } catch (e) {}
-})();
-</script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-html, .editor-preview-boot #intro,
-.editor-preview-boot #loading-screen { display:none !important; }
-.editor-preview-boot #sky { display:block !important; }
-.editor-preview-boot #sky-canvas { opacity:1 !important; }
-
-body { width:100%; height:100%; overflow:hidden; background:#00010f; font-family:'Georgia',serif; }
+html, body { width:100%; height:100%; overflow:hidden; background:#00010f; font-family:'Georgia',serif; }
 
 #intro {
   position:fixed; inset:0; z-index:10;
@@ -1366,16 +1351,18 @@ function pushLiveNotice(memories) {
   const card = document.createElement('div');
   card.className = 'live-notice';
 
+  const hasNavigableTarget = item => item && ((item.idx !== null && item.idx !== undefined) || (item.rowId !== null && item.rowId !== undefined));
+
   const single = items.length === 1;
   const bodyHtml = single
     ? `<div class="live-notice-body"><strong>${items[0].name}</strong> just appeared in the sky.${
-        items[0].idx !== null
+        hasNavigableTarget(items[0])
           ? '<br><span class="live-notice-nav">tap to fly there \u2197</span>'
           : ''
       }</div>`
     : `<div class="live-notice-body">${items.length} new memories just appeared in the sky.</div>
        <ul class="live-notice-list">${items.map(m => `<li>${m.name}</li>`).join('')}</ul>
-       ${items.find(m => m.idx !== null) ? '<span class="live-notice-nav">tap to fly to the first one \u2197</span>' : ''}`;
+       ${items.find(hasNavigableTarget) ? '<span class="live-notice-nav">tap to fly to the first one \u2197</span>' : ''}`;
 
   card.innerHTML = `
     <div class="live-notice-head">
@@ -1393,16 +1380,17 @@ function pushLiveNotice(memories) {
 
   const navTarget = single
     ? items[0]
-    : items.find(m => m.idx !== null);
+    : items.find(hasNavigableTarget);
 
-  if (navTarget && navTarget.idx !== null) {
+  if (navTarget && hasNavigableTarget(navTarget)) {
     card.classList.add('live-notice-clickable');
     card.addEventListener('click', e => {
       if (e.target.closest('.live-notice-close')) return;
-      panToStar(navTarget.idx);
-      card.style.transition = 'opacity .25s ease';
-      card.style.opacity = '0';
-      setTimeout(() => card.remove(), 260);
+      if (beginPanTo(navTarget)) {
+        card.style.transition = 'opacity .25s ease';
+        card.style.opacity = '0';
+        setTimeout(() => card.remove(), 260);
+      }
     });
   }
 
@@ -1428,32 +1416,43 @@ function revealNewStarWithPan(idx) {
   }, 1900); // slightly after the 1800ms pan
 }
 
-// Pan camera smoothly to a specific star by index
-function panToStar(idx) {
+function resolvePanTargetIndex(ref){
+  if (ref && typeof ref === 'object') {
+    if (ref.rowId !== undefined && ref.rowId !== null) {
+      const liveIdx = findMemoryIndexByRowId(ref.rowId);
+      if (liveIdx >= 0) return liveIdx;
+    }
+    if (typeof ref.idx === 'number' && sprites[ref.idx]) return ref.idx;
+  }
+  if (typeof ref === 'number' && sprites[ref]) return ref;
+  return -1;
+}
+
+function beginPanTo(ref) {
+  const idx = resolvePanTargetIndex(ref);
+  if (idx < 0 || !scene) return false;
   const starSprite = sprites[idx];
-  if (!starSprite || !scene) return;
+  if (!starSprite) return false;
+
   const dir = starSprite.position.clone().normalize();
-  const horizLen = Math.sqrt(dir.x * dir.x + dir.z * dir.z);
-  const targetY = Math.atan2(dir.x, dir.z);
-  const targetX = -Math.atan2(dir.y, horizLen);
-  const startX = scene.rotation.x;
-  const startY = scene.rotation.y;
-  let dy = targetY - startY;
-  while (dy >  Math.PI) dy -= Math.PI * 2;
-  while (dy < -Math.PI) dy += Math.PI * 2;
-  let dx = targetX - startX;
-  while (dx >  Math.PI) dx -= Math.PI * 2;
-  while (dx < -Math.PI) dx += Math.PI * 2;
+  const targetQuat = new THREE.Quaternion().setFromUnitVectors(dir, new THREE.Vector3(0, 0, -1));
+
   hintPan = {
-    startX, startY,
-    finalX: startX + dx,
-    finalY: startY + dy,
+    startQuat: scene.quaternion.clone(),
+    targetQuat: targetQuat.clone(),
     startTime: performance.now(),
     duration: 1800,
-    targetIdx: idx
+    targetIdx: idx,
+    targetDir: dir.clone()
   };
   hintTrailVel = { x: 0, y: 0 };
   rotV = { x: 0, y: 0 };
+  return true;
+}
+
+// Pan camera smoothly to a specific star by index
+function panToStar(idx) {
+  return beginPanTo(idx);
 }
 
 function queueNewStarReveal(idx){
@@ -2046,16 +2045,32 @@ function initEditorPreviewTransport(){
 function applyEditorPreviewChrome(){
   if (!IS_EDITOR_PREVIEW) return;
   document.body.classList.add('editor-preview-mode');
+  document.documentElement.classList.add('editor-preview-mode');
   ['hud','live-notices','toast','music-controls','star-tooltip','modal-wrap','journal-wrap','finale','cursor-glow','loading-screen','intro'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
+    if (el) {
+      el.style.display = 'none';
+      el.setAttribute('aria-hidden', 'true');
+    }
   });
+  const intro = document.getElementById('intro');
+  if (intro) {
+    intro.classList.add('fade');
+    intro.style.display = 'none';
+    intro.style.opacity = '0';
+    intro.style.pointerEvents = 'none';
+    intro.style.visibility = 'hidden';
+  }
   const loader = document.getElementById('loader');
   if (loader) loader.style.display = 'none';
   const debugPanel = document.getElementById('debug-panel');
   if (debugPanel) debugPanel.style.display = 'none';
   const sky = document.getElementById('sky');
-  if (sky) sky.style.display = 'block';
+  if (sky) {
+    sky.style.display = 'block';
+    sky.style.visibility = 'visible';
+    sky.style.opacity = '1';
+  }
 }
 
 async function bootEditorPreviewSky(){
@@ -2063,23 +2078,21 @@ async function bootEditorPreviewSky(){
   window.__previewBooted = true;
   applyEditorPreviewChrome();
   const skyEl = document.getElementById('sky');
-  skyEl.style.display = 'block';
+  if (skyEl) skyEl.style.display = 'block';
   const cvs = document.getElementById('sky-canvas');
-  cvs.width = window.innerWidth;
-  cvs.height = window.innerHeight;
-  cvs.style.width = window.innerWidth + 'px';
-  cvs.style.height = window.innerHeight + 'px';
-  void skyEl.offsetWidth;
-  try {
-    await refreshRemoteMemories(false);
-  } catch (err) {
-    console.warn('Preview memory refresh failed:', err);
+  if (cvs) {
+    cvs.width = window.innerWidth;
+    cvs.height = window.innerHeight;
+    cvs.style.width = window.innerWidth + 'px';
+    cvs.style.height = window.innerHeight + 'px';
   }
+  if (skyEl) void skyEl.offsetWidth;
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       initThree();
       if (_previewDraftPayload) upsertPreviewDraft(_previewDraftPayload);
       applyEditorPreviewChrome();
+      refreshRemoteMemories(false).catch(err => console.warn('Preview memory refresh failed:', err));
     });
   });
 }
@@ -2509,62 +2522,13 @@ let hintTrailVel = {x:0, y:0};
 
 function giveHint(){
   if(modalOpen) return;
-  const undiscovered = MEMORIES.map((_,i)=>i).filter(i=>!visited.has(i));
+  const undiscovered = MEMORIES.map((_,i)=>i).filter(i=>!visited.has(i) && sprites[i]);
   if(undiscovered.length===0){
-    showToast("You've found every star ✦\nNew memories are still in the making.");
+    showToast("You\'ve found every star ✦\nNew memories are still in the making.");
     return;
   }
   const idx = undiscovered[Math.floor(Math.random()*undiscovered.length)];
-  const m = MEMORIES[idx];
-
-  // Get the target star's world position
-  const starSprite = sprites[idx];
-  const starWorldPos = starSprite.position.clone();
-
-  // The star is at local position P inside the scene.
-  // scene.rotation rotates the whole scene around the camera (at origin).
-  // Camera looks toward -Z.
-  //
-  // We need scene.rotation such that, after rotation, the star's
-  // local position P ends up aligned with the camera's -Z axis.
-  //
-  // scene.rotation is applied as: worldPos = R * localPos
-  // We want: R * P = [0, 0, -|P|]
-  // So R must map P's direction to [0,0,-1].
-  // This means R = inverse of "rotation that maps [0,0,-1] to dir(P)".
-  //
-  // For Euler XY:
-  //   Step 1 — Y rotation to face the star's azimuth in XZ plane:
-  //     targetY = atan2(dir.x, dir.z)   (not negated — we want to rotate TO it)
-  //   Step 2 — X rotation to tilt up/down to the star's elevation:
-  //     targetX = -atan2(dir.y, horizLen) (negative: tilting up means negative X rot)
-  const dir = starWorldPos.clone().normalize();
-  const horizLen = Math.sqrt(dir.x*dir.x + dir.z*dir.z);
-
-  const targetY = Math.atan2(dir.x, dir.z);
-  const targetX = -Math.atan2(dir.y, horizLen);
-
-  const startX = scene.rotation.x;
-  const startY = scene.rotation.y;
-
-  // Shortest arc on both axes
-  let dy = targetY - startY;
-  while(dy >  Math.PI) dy -= Math.PI*2;
-  while(dy < -Math.PI) dy += Math.PI*2;
-  let dx = targetX - startX;
-  while(dx >  Math.PI) dx -= Math.PI*2;
-  while(dx < -Math.PI) dx += Math.PI*2;
-
-  hintPan = {
-    startX, startY,
-    finalX: startX + dx,
-    finalY: startY + dy,
-    startTime: performance.now(),
-    duration: 1800,
-    targetIdx: idx
-  };
-  hintTrailVel = {x:0, y:0};
-  rotV = {x:0, y:0};
+  beginPanTo(idx);
 }
 
 function showToast(msg){
@@ -2584,23 +2548,33 @@ function animate(now=0){
   if(hintPan){
     const p = Math.min(1,(now-hintPan.startTime)/hintPan.duration);
     const ease = p<.5 ? 2*p*p : 1-Math.pow(-2*p+2,2)/2;
-    const prevX = scene.rotation.x;
-    const prevY = scene.rotation.y;
-    scene.rotation.x = hintPan.startX + (hintPan.finalX - hintPan.startX)*ease;
-    scene.rotation.y = hintPan.startY + (hintPan.finalY - hintPan.startY)*ease;
+    const prevQuat = scene.quaternion.clone();
 
-    // Invisible centre-ray check: cast ray from exact screen centre each frame.
-    // If it hits the target star's hitbox, the camera IS centred — stop the pan.
-    const centreRay = new THREE.Raycaster();
-    centreRay.setFromCamera(new THREE.Vector2(0,0), camera);
-    const targetHb = hitboxes.find(h=>h.userData.idx===hintPan.targetIdx);
-    if(targetHb){
-      const hit = centreRay.intersectObject(targetHb);
-      if(hit.length>0) hintPan=null; // perfectly centred — done
+    scene.quaternion.copy(hintPan.startQuat.clone().slerp(hintPan.targetQuat, ease));
+
+    const deltaQuat = prevQuat.clone().invert().multiply(scene.quaternion);
+    const axisLenSq = deltaQuat.x*deltaQuat.x + deltaQuat.y*deltaQuat.y + deltaQuat.z*deltaQuat.z;
+    if(axisLenSq > 1e-10){
+      const axisLen = Math.sqrt(axisLenSq);
+      const angle = 2 * Math.atan2(axisLen, Math.max(1e-8, deltaQuat.w));
+      hintTrailVel.x = (deltaQuat.x / axisLen) * angle * 0.28;
+      hintTrailVel.y = (deltaQuat.y / axisLen) * angle * 0.28;
+    } else {
+      hintTrailVel.x = 0;
+      hintTrailVel.y = 0;
     }
 
-    hintTrailVel.x = scene.rotation.x - prevX;
-    hintTrailVel.y = scene.rotation.y - prevY;
+    const targetSprite = sprites[hintPan.targetIdx];
+    if(targetSprite && p > 0.82){
+      const centreDir = new THREE.Vector3(0,0,-1).applyQuaternion(scene.quaternion.clone().invert()).normalize();
+      const targetDir = targetSprite.position.clone().normalize();
+      const ang = centreDir.angleTo(targetDir);
+      if(ang < 0.012){
+        hintPan = null;
+        hintTrailVel = {x:0, y:0};
+      }
+    }
+
     if(p>=1){ hintPan=null; hintTrailVel={x:0,y:0}; }
   } else {
     hintTrailVel = {x:0, y:0};
@@ -3255,7 +3229,7 @@ function applyConnectionsAndCluster() {
         if (item.rowId) _pendingRevealRowIds.delete(item.rowId);
         revealNewStarWithPan(item.idx);
       });
-      if (newSessionIdxs.length) pushLiveNotice(newSessionIdxs.map(({ idx, name }) => ({ idx, name })));
+      if (newSessionIdxs.length) pushLiveNotice(newSessionIdxs.map(({ idx, name, rowId }) => ({ idx, name, rowId })));
     }
   }
 
@@ -3270,7 +3244,7 @@ function applyConnectionsAndCluster() {
       _pendingRevealRowIds.delete(key);
     }
     revealNow.forEach(item => revealNewStarWithPan(item.idx));
-    if (revealNow.length) pushLiveNotice(revealNow.map(({ idx, name }) => ({ idx, name })));
+    if (revealNow.length) pushLiveNotice(revealNow.map(({ idx, name, rowId }) => ({ idx, name, rowId })));
   }
 
   // ── Cluster connected chains far from each other ──────────────────────────
