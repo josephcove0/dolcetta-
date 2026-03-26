@@ -232,20 +232,8 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
           <button id="cancel-edit-btn" onclick="cancelEdit()" type="button">cancel edit</button>
         </div>
         <div id="status"></div>
-
         <div class="preview-card">
-          <div class="preview-head">
-            <div>
-              <div class="preview-title">live sky preview</div>
-              <div class="preview-sub">as you type, a draft star appears in the sky below.</div>
-            </div>
-            <div class="preview-actions">
-              <a href="./index.html?editor_preview=1" target="_blank">↗ open preview</a>
-              <button type="button" onclick="clearEditorPreview()">clear preview</button>
-            </div>
-          </div>
           <iframe id="live-preview-frame" class="preview-frame" loading="lazy" referrerpolicy="same-origin"></iframe>
-          <div class="preview-note">preview stars are temporary and never save unless you press the add/save button.</div>
         </div>
       </div>
     </div>
@@ -311,6 +299,15 @@ $('pw-in').addEventListener('keydown', e => { if (e.key === 'Enter') tryPw(); })
 
 function showPwErr(msg){ $('pw-err').textContent = msg || ''; }
 function setStatus(msg, kind=''){ const el = $('status'); el.className = kind ? kind : ''; el.textContent = msg || ''; }
+
+function openTab(tabName){
+  document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+  const panel = document.getElementById(`tab-${tabName}`);
+  if (panel) panel.classList.add('active');
+}
 
 function escapeHtml(str=''){
   return String(str)
@@ -433,6 +430,12 @@ function ensurePreviewBus(){
   return _previewBus;
 }
 
+function sendPreviewToFrame(msg){
+  const frame = $('live-preview-frame');
+  if (!frame || !frame.contentWindow) return;
+  try { frame.contentWindow.postMessage(msg, '*'); } catch (_) {}
+}
+
 function currentPreviewPayload(){
   return {
     source: 'admin',
@@ -445,15 +448,17 @@ function currentPreviewPayload(){
 }
 
 function postPreviewDraft(){
+  const payload = currentPreviewPayload();
   const bus = ensurePreviewBus();
-  if (!bus) return;
-  bus.postMessage({ type: 'preview-draft', payload: currentPreviewPayload() });
+  if (bus) bus.postMessage({ type: 'preview-draft', payload });
+  sendPreviewToFrame({ type: 'preview-draft', payload });
 }
+
 
 function clearEditorPreview(){
   const bus = ensurePreviewBus();
-  if (!bus) return;
-  bus.postMessage({ type: 'preview-clear' });
+  if (bus) bus.postMessage({ type: 'preview-clear' });
+  sendPreviewToFrame({ type: 'preview-clear' });
 }
 
 function schedulePreview(){

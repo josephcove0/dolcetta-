@@ -564,7 +564,11 @@ body.editor-preview-mode #journal,
 body.editor-preview-mode #journal-btn,
 body.editor-preview-mode #about-btn,
 body.editor-preview-mode #music-btn,
-body.editor-preview-mode #live-notices {
+body.editor-preview-mode #live-notices,
+body.editor-preview-mode #cursor-glow,
+body.editor-preview-mode #loading-screen,
+body.editor-preview-mode #hint-btn,
+body.editor-preview-mode #star-counter {
   display:none !important;
 }
 body.editor-preview-mode #sky { display:block !important; }
@@ -1192,6 +1196,7 @@ function getBloomTexture(){
 
 
 function pushLiveNotice(memories) {
+  if (IS_EDITOR_PREVIEW) return;
   const list = Array.isArray(memories) ? memories : [memories];
   if (!list.length) return;
 
@@ -1777,6 +1782,8 @@ async function enterSky(){
 
 function bootEditorPreviewMode(){
   if (!IS_EDITOR_PREVIEW) return;
+  try { document.documentElement.classList.add('editor-preview-mode'); } catch(_) {}
+  try { document.body.classList.add('editor-preview-mode'); } catch(_) {}
   const intro = document.getElementById('intro');
   const loader = document.getElementById('loader');
   const loading = document.getElementById('loading-screen');
@@ -2693,10 +2700,203 @@ let _crossTabMemoryBus = null;
 const crossTabMemoryChannel = 'dolcetta-memory-live';
 const previewMemoryChannel = 'dolcetta-editor-preview';
 const IS_EDITOR_PREVIEW = new URLSearchParams(location.search).get('editor_preview') === '1';
+try { if (IS_EDITOR_PREVIEW) { document.documentElement.classList.add('editor-preview-mode'); document.body && document.body.classList.add('editor-preview-mode'); } } catch (_) {}
 let _previewBus = null;
 let _pendingPreviewDraft = null;
 let previewDraftState = { active:false, payload:null, sprite:null, ring:null, line:null };
 const recentLiveNoticeKeys = new Map();
+
+
+function _previewHash(text='') {
+  let h = 2166136261;
+  const str = String(text || '');
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) || 1;
+}
+
+function _previewUnitFromMemory(mem) {
+  return {
+    ux: Math.sin(mem.phi) * Math.cos(mem.theta),
+    uy: Math.cos(mem.phi),
+    uz: Math.sin(mem.phi) * Math.sin(mem.theta)
+  };
+}
+
+function _previewDirToPolar(dir) {
+  const uy = Math.max(-1, Math.min(1, dir.uy));
+  return {
+    phi: Math.acos(uy),
+    theta: Math.atan2(dir.uz, dir.ux)
+  };
+}
+
+function _previewCurrentViewUnit() {
+  const v = new THREE.Vector3(0, 0, -1);
+  if (typeof scene !== 'undefined' && scene) {
+    v.applyEuler(new THREE.Euler(-scene.rotation.x, -scene.rotation.y, 0, 'XYZ'));
+  }
+  v.normalize();
+  return { ux: v.x, uy: v.y, uz: v.z };
+}
+
+function _previewDirNear(anchor, seedText, maxArc = 0.10, minArc = 0.02) {
+  const seed = _previewHash(seedText);
+  const rng = seededRng(seed);
+  let ax, ay, az;
+  if (Math.abs(anchor.ux) < 0.9) { ax = 0; ay = -anchor.uz; az = anchor.uy; }
+  else { ax = -anchor.uy; ay = anchor.ux; az = 0; }
+  const len = Math.sqrt(ax*ax + ay*ay + az*az) || 1;
+  ax /= len; ay /= len; az /= len;
+  const azimuth = rng() * Math.PI * 2;
+  const c = Math.cos(azimuth), s = Math.sin(azimuth);
+  const dot = ax*anchor.ux + ay*anchor.uy + az*anchor.uz;
+  const perx = ax*c + s*(anchor.uy*az - anchor.uz*ay) + dot*(1-c)*anchor.ux;
+  const pery = ay*c + s*(anchor.uz*ax - anchor.ux*az) + dot*(1-c)*anchor.uy;
+  const perz = az*c + s*(anchor.ux*ay - anchor.uy*ax) + dot*(1-c)*anchor.uz;
+  const arc = minArc + rng() * Math.max(0.001, maxArc - minArc);
+  const ca = Math.cos(arc), sa = Math.sin(arc);
+  const nx = anchor.ux*ca + perx*sa;
+  const ny = anchor.uy*ca + pery*sa;
+  const nz = anchor.uz*ca + perz*sa;
+  const nl = Math.sqrt(nx*nx + ny*ny + nz*nz) || 1;
+  return { ux: nx/nl, uy: ny/nl, uz: nz/nl };
+}
+
+function clearPreviewDraft() {
+  if (previewDraftState.line && scene) scene.remove(previewDraftState.line);
+  if (previewDraftState.sprite && scene) scene.remove(previewDraftState.sprite);
+  if (previewDraftState.ring && scene) scene.remove(previewDraftState.ring);
+  [previewDraftState.line, previewDraftState.sprite, previewDraftState.ring].forEach(obj => {
+    if (!obj) return;
+    if (obj.geometry && obj.geometry.dispose) obj.geometry.dispose();
+    if (obj.material) {
+      if (obj.material.map && obj.material.map.dispose) obj.material.map.dispose();
+      if (obj.material.dispose) obj.material.dispose();
+    }
+  });
+  previewDraftState = { active:false, payload:null, sprite:null, ring:null, line:null };
+}
+
+function applyPreviewDraft(payload) {
+  if (!IS_EDITOR_PREVIEW) return;
+  if (!payload || typeof scene === 'undefined' || !scene) {
+    _pendingPreviewDraft = payload || null;
+    if (!payload) clearPreviewDraft();
+    return;
+  }
+
+  const safePayload = {
+    name: String(payload.name || '').trim() || 'draft memory',
+    text: String(payload.text || '').trim(),
+    photo: payload.photo || null,
+    sz: Number(payload.sz || 1.8),
+    connect_to: payload.connect_to === '' || payload.connect_to === undefined || payload.connect_to === null
+      ? null
+      : Number(payload.connect_to)
+  };
+
+  clearPreviewDraft();
+  _pendingPreviewDraft = safePayload;
+
+  const anchorIdx = Number.isInteger(safePayload.connect_to) && MEMORIES[safePayload.connect_to]
+    ? safePayload.connect_to
+    : null;
+  const baseDir = anchorIdx !== null
+    ? _previewUnitFromMemory(MEMORIES[anchorIdx])
+    : _previewCurrentViewUnit();
+  const dir = _previewDirNear(
+    baseDir,
+    `${safePayload.name}|${safePayload.text}|${safePayload.connect_to ?? 'x'}`,
+    anchorIdx !== null ? 0.11 : 0.045,
+    anchorIdx !== null ? 0.03 : 0.01
+  );
+  const polar = _previewDirToPolar(dir);
+  const size = Number.isFinite(safePayload.sz) ? safePayload.sz : 1.8;
+  const tier = getStarHierarchy(size);
+  const rgb = TYPE_HEX.memory;
+  const R = 16;
+  const x = R*Math.sin(polar.phi)*Math.cos(polar.theta);
+  const y = R*Math.cos(polar.phi);
+  const z = R*Math.sin(polar.phi)*Math.sin(polar.theta);
+
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(makeStar2DCanvas(size, rgb, false, tier)),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.96
+  }));
+  sp.position.set(x, y, z);
+  const spScale = size * (tier === 'milestone' ? 0.32 : tier === 'keepsake' ? 0.29 : 0.26);
+  sp.scale.set(spScale, spScale, 1);
+  sp.renderOrder = 9;
+  scene.add(sp);
+
+  const rg = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(makeStar2DCanvas(size, rgb, true, tier)),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.88
+  }));
+  rg.position.set(x, y, z);
+  const rgScale = size * (tier === 'milestone' ? 0.68 : tier === 'keepsake' ? 0.62 : 0.56);
+  rg.scale.set(rgScale, rgScale, 1);
+  rg.renderOrder = 8;
+  scene.add(rg);
+
+  let line = null;
+  if (anchorIdx !== null && sprites[anchorIdx]) {
+    const pts = new Float32Array([
+      sprites[anchorIdx].position.x, sprites[anchorIdx].position.y, sprites[anchorIdx].position.z,
+      x, y, z
+    ]);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    const mat = new THREE.LineBasicMaterial({
+      color: 0xe8526a,
+      transparent: true,
+      opacity: 0.42,
+      depthWrite: false
+    });
+    line = new THREE.Line(geo, mat);
+    line.renderOrder = 6;
+    scene.add(line);
+  }
+
+  previewDraftState = { active:true, payload:safePayload, sprite:sp, ring:rg, line };
+}
+
+function startPreviewSync() {
+  if (!IS_EDITOR_PREVIEW) return;
+  if (_previewBus) return;
+
+  function handlePreviewMessage(msg) {
+    const data = msg && msg.data ? msg.data : msg;
+    if (!data || typeof data !== 'object') return;
+    if (data.type === 'preview-draft') {
+      _pendingPreviewDraft = data.payload || null;
+      if (scene) applyPreviewDraft(_pendingPreviewDraft);
+    } else if (data.type === 'preview-clear') {
+      _pendingPreviewDraft = null;
+      if (scene) clearPreviewDraft();
+    }
+  }
+
+  try {
+    if ('BroadcastChannel' in window) {
+      _previewBus = new BroadcastChannel(previewMemoryChannel);
+      _previewBus.addEventListener('message', handlePreviewMessage);
+    }
+  } catch (err) {
+    console.warn('Preview channel unavailable:', err);
+  }
+
+  window.addEventListener('message', handlePreviewMessage);
+}
 
 function startSupabaseRealtime(){
   if (_supabaseLiveChannel) return;
