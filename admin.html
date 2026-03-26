@@ -300,7 +300,7 @@ function tryPw(){
   const frame = $('live-preview-frame');
   if (frame) {
     frame.removeAttribute('loading');
-    frame.src = './index.html?editor_preview=1&v=' + Date.now();
+    frame.src = './index.html?embed_preview=1&v=' + Date.now();
     frame.addEventListener('load', () => { postPreviewDraft(); }, { once: true });
   }
   loadMemories();
@@ -314,7 +314,7 @@ $('pw-in').addEventListener('keydown', e => { if (e.key === 'Enter') tryPw(); })
 
 function showPwErr(msg){ $('pw-err').textContent = msg || ''; }
 function setStatus(msg, kind=''){ const el = $('status'); el.className = kind ? kind : ''; el.textContent = msg || ''; }
-function setConnStatus(msg, kind=''){ const el = $('conn-status'); el.style.color = kind === 'err' ? '#e8526a' : kind === 'ok' ? '#5dcaa5' : 'rgba(245,200,210,.5)'; el.textContent = msg || ''; }
+function setConnStatus(msg, kind=''){ const el = $('conn-status'); if (!el) return; el.style.color = kind === 'err' ? '#e8526a' : kind === 'ok' ? '#5dcaa5' : 'rgba(245,200,210,.5)'; el.textContent = msg || ''; }
 
 function openTab(tabName){
   document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
@@ -379,6 +379,7 @@ function buildCombinedNames(extraRows = extras){
 
 function populateConnectDropdown(currentConnect = '', excludeExtraId = null){
   const sel = $('f-connect');
+  if (!sel) return;
   const names = buildCombinedNames();
   const options = ['<option value="">— no connection —</option>'];
   names.forEach((name, idx) => {
@@ -394,6 +395,7 @@ function populateConnectDropdown(currentConnect = '', excludeExtraId = null){
 
 function renderBuiltinConnRows(){
   const wrap = $('builtin-conn-rows');
+  if (!wrap) return;
   const options = ['<option value="">— none —</option>'];
   BUILTINS.forEach((name, idx) => options.push(`<option value="${idx}">${escapeHtml(name)}</option>`));
   wrap.innerHTML = BUILTINS.map((name, idx) => `
@@ -412,6 +414,7 @@ function renderBuiltinConnRows(){
 
 function renderMemoryList(){
   const list = $('memory-list');
+  if (!list) return;
   const rows = [];
 
   BUILTINS.forEach((name, idx) => {
@@ -488,13 +491,14 @@ function sendPreviewToFrame(msg){
 }
 
 function currentPreviewPayload(){
+  const connectEl = $('f-connect');
   return {
     source: 'admin',
     name: $('f-name').value.trim() || 'draft memory',
     text: $('f-text').value.trim() || 'still writing...',
     photo: photo64 || null,
     sz: Number(selSzVal || 1.8),
-    connect_to: $('f-connect').value === '' ? null : Number($('f-connect').value)
+    connect_to: !connectEl || connectEl.value === '' ? null : Number(connectEl.value)
   };
 }
 
@@ -588,7 +592,8 @@ async function loadMemories(){
 async function saveMemory(){
   const name = $('f-name').value.trim();
   const text = $('f-text').value.trim();
-  const connectVal = $('f-connect').value;
+  const connectEl = $('f-connect');
+  const connectVal = connectEl ? connectEl.value : '';
 
   if (!name || !text) {
     setStatus('name and text are required', 'err');
