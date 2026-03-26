@@ -555,6 +555,21 @@ html, body { width:100%; height:100%; overflow:hidden; background:#00010f; font-
   0%,100% { transform: scale(1);   opacity:.4; }
   50%      { transform: scale(1.6); opacity:1; }
 }
+
+body.editor-preview-mode #intro,
+body.editor-preview-mode #loader,
+body.editor-preview-mode #hud,
+body.editor-preview-mode #nav-hint,
+body.editor-preview-mode #journal,
+body.editor-preview-mode #journal-btn,
+body.editor-preview-mode #about-btn,
+body.editor-preview-mode #music-btn,
+body.editor-preview-mode #live-notices {
+  display:none !important;
+}
+body.editor-preview-mode #sky { display:block !important; }
+body.editor-preview-mode #sky-canvas { cursor:grab; }
+
 </style>
 </head>
 <body>
@@ -1035,21 +1050,34 @@ function buildSkyTexture() {
 }
 
 // ─── STAR / RING CANVASES ────────────────────────────────────────────────────
-function makeStar2DCanvas(sz,rgb,isRing){
-  const dim=Math.max(80,Math.ceil(sz)*18);
+
+function makeStar2DCanvas(sz,rgb,isRing,tierName){
+  const tier = tierName || getStarHierarchy(sz);
+  const cfg = tier === 'milestone'
+    ? { dimMul: 1.22, ringAlpha: 0.95, ringBlur: 14, ringWidth: 2.4, glow: 0.62, cross: 0.44, core: 0.066 }
+    : tier === 'keepsake'
+      ? { dimMul: 1.08, ringAlpha: 0.82, ringBlur: 11, ringWidth: 2.0, glow: 0.50, cross: 0.36, core: 0.058 }
+      : { dimMul: 1.0, ringAlpha: 0.68, ringBlur: 8, ringWidth: 1.7, glow: 0.40, cross: 0.28, core: 0.052 };
+
+  const dim=Math.max(80,Math.ceil(sz)*18*cfg.dimMul);
   const oc=document.createElement('canvas'); oc.width=dim; oc.height=dim;
   const cx=oc.getContext('2d');
   if(isRing){
     cx.strokeStyle=`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
-    cx.lineWidth=1.8; cx.globalAlpha=.7;
-    cx.shadowColor=`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; cx.shadowBlur=8;
+    cx.lineWidth=cfg.ringWidth; cx.globalAlpha=cfg.ringAlpha;
+    cx.shadowColor=`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; cx.shadowBlur=cfg.ringBlur;
     cx.beginPath(); cx.arc(dim/2,dim/2,dim*.43,0,Math.PI*2); cx.stroke();
+    if (tier === 'milestone') {
+      cx.globalAlpha = 0.34;
+      cx.lineWidth = 1.1;
+      cx.beginPath(); cx.arc(dim/2,dim/2,dim*.35,0,Math.PI*2); cx.stroke();
+    }
     return oc;
   }
   cx.save(); cx.translate(dim/2,dim/2);
   const o=dim*.40, i=dim*.10;
   cx.fillStyle=`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
-  cx.shadowColor=`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; cx.shadowBlur=dim*.42;
+  cx.shadowColor=`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; cx.shadowBlur=dim*cfg.glow;
   cx.beginPath();
   for(let k=0;k<16;k++){
     const a=(k*Math.PI/8)-Math.PI/2, r=k%2===0?o:i;
@@ -1057,14 +1085,22 @@ function makeStar2DCanvas(sz,rgb,isRing){
   }
   cx.closePath(); cx.fill();
   cx.strokeStyle=`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; cx.lineWidth=dim*.036;
-  cx.shadowBlur=dim*.22; cx.globalAlpha=.32;
+  cx.shadowBlur=dim*.22; cx.globalAlpha=cfg.cross;
   const cl=dim*.48;
   cx.beginPath(); cx.moveTo(-cl,0); cx.lineTo(cl,0); cx.moveTo(0,-cl); cx.lineTo(0,cl); cx.stroke();
+  if (tier !== 'soft') {
+    cx.globalAlpha = tier === 'milestone' ? 0.18 : 0.12;
+    cx.beginPath();
+    cx.moveTo(-cl*0.72, -cl*0.72); cx.lineTo(cl*0.72, cl*0.72);
+    cx.moveTo(-cl*0.72, cl*0.72); cx.lineTo(cl*0.72, -cl*0.72);
+    cx.stroke();
+  }
   cx.globalAlpha=1; cx.shadowBlur=0;
-  cx.fillStyle='#ffffff'; cx.beginPath(); cx.arc(0,0,dim*.052,0,Math.PI*2); cx.fill();
+  cx.fillStyle='#ffffff'; cx.beginPath(); cx.arc(0,0,dim*cfg.core,0,Math.PI*2); cx.fill();
   cx.restore();
   return oc;
 }
+
 
 // ─── THREE.JS GLOBALS ────────────────────────────────────────────────────────
 let scene,camera,renderer,raycaster,mouse;
@@ -1078,172 +1114,70 @@ let lastTouchTime = 0;
 let modalOpenedAt = 0;
 let newStarAnimations = [];
 let starRemovalAnimations = [];
-let supernovaBursts = [];   // irregular breakout spikes + debris shell
-let supernovaBloom  = [];   // soft thermal glow
-let supernovaShocks = [];   // sharp white-blue shock breakout
-let supernovaShells = [];   // warm expanding ejecta shell
-let supernovaEmbers = [];   // drifting filaments / sparks
+let supernovaBursts = [];   // phase 2: spiky burst rays
+let supernovaBloom  = [];   // phase 1: expanding soft light blob
+let previewPulseClock = 0;
 let burstTexture = null;
 let bloomTexture = null;
-let shockTexture = null;
-let shellTexture = null;
-let emberTexture = null;
 const removingRowIds = new Set();
 
-function buildNoiseRadius(a, phase=0){
-  return 1
-    + 0.18 * Math.sin(a * 3 + phase)
-    + 0.10 * Math.sin(a * 7 - phase * 0.7)
-    + 0.06 * Math.cos(a * 11 + phase * 1.3);
-}
-
-function makeShockBreakoutCanvas(){
-  const dim = 384;
+// Spiky burst texture (existing)
+function makeSupernovaCanvas(){
+  const dim = 256;
   const c = document.createElement('canvas');
   c.width = dim; c.height = dim;
   const cx = c.getContext('2d');
-  cx.translate(dim / 2, dim / 2);
+  cx.translate(dim/2, dim/2);
 
-  const g = cx.createRadialGradient(0, 0, 0, 0, 0, dim * 0.36);
+  const g = cx.createRadialGradient(0,0,0,0,0,dim*0.45);
   g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.06, 'rgba(232,248,255,0.98)');
-  g.addColorStop(0.16, 'rgba(170,224,255,0.85)');
-  g.addColorStop(0.34, 'rgba(110,182,255,0.30)');
-  g.addColorStop(0.62, 'rgba(80,120,255,0.06)');
-  g.addColorStop(1, 'rgba(0,0,0,0)');
+  g.addColorStop(0.08, 'rgba(255,236,240,.95)');
+  g.addColorStop(0.22, 'rgba(232,130,145,.78)');
+  g.addColorStop(0.5, 'rgba(232,82,106,.18)');
+  g.addColorStop(1, 'rgba(232,82,106,0)');
   cx.fillStyle = g;
-  cx.beginPath(); cx.arc(0, 0, dim * 0.34, 0, Math.PI * 2); cx.fill();
+  cx.beginPath(); cx.arc(0,0,dim*0.45,0,Math.PI*2); cx.fill();
 
-  cx.globalCompositeOperation = 'lighter';
-  for(let i = 0; i < 18; i++){
-    const a = (Math.PI * 2 / 18) * i + (i % 2 ? 0.08 : -0.05);
-    const inner = dim * 0.04;
-    const outer = dim * (0.18 + (i % 3) * 0.06 + (i % 5) * 0.012);
-    cx.strokeStyle = i % 4 === 0 ? 'rgba(255,255,255,0.92)' : 'rgba(185,228,255,0.65)';
-    cx.lineWidth = i % 3 === 0 ? 4 : 2.2;
-    cx.shadowColor = 'rgba(170,220,255,0.9)';
-    cx.shadowBlur = 24;
+  cx.strokeStyle = 'rgba(255,225,235,.78)';
+  cx.lineWidth = 3;
+  cx.shadowColor = 'rgba(232,82,106,.7)';
+  cx.shadowBlur = 18;
+  for(let i=0;i<8;i++){
+    const a = (Math.PI*2/8) * i;
+    const inner = dim*0.08;
+    const outer = dim*(i % 2 === 0 ? 0.42 : 0.28);
     cx.beginPath();
-    cx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
-    cx.lineTo(Math.cos(a) * outer, Math.sin(a) * outer);
+    cx.moveTo(Math.cos(a)*inner, Math.sin(a)*inner);
+    cx.lineTo(Math.cos(a)*outer, Math.sin(a)*outer);
     cx.stroke();
   }
 
   cx.shadowBlur = 0;
-  cx.strokeStyle = 'rgba(220,240,255,0.35)';
-  cx.lineWidth = 5;
-  cx.beginPath(); cx.arc(0, 0, dim * 0.12, 0, Math.PI * 2); cx.stroke();
+  cx.strokeStyle = 'rgba(255,205,220,.4)';
+  cx.lineWidth = 4;
+  cx.beginPath(); cx.arc(0,0,dim*0.25,0,Math.PI*2); cx.stroke();
   return c;
 }
 
-function makeSupernovaCanvas(){
-  const dim = 384;
-  const c = document.createElement('canvas');
-  c.width = dim; c.height = dim;
-  const cx = c.getContext('2d');
-  cx.translate(dim / 2, dim / 2);
-
-  cx.globalCompositeOperation = 'lighter';
-  const g = cx.createRadialGradient(0, 0, 0, 0, 0, dim * 0.46);
-  g.addColorStop(0, 'rgba(255,252,245,1)');
-  g.addColorStop(0.08, 'rgba(255,228,190,0.95)');
-  g.addColorStop(0.20, 'rgba(255,170,110,0.84)');
-  g.addColorStop(0.36, 'rgba(255,105,88,0.46)');
-  g.addColorStop(0.62, 'rgba(186,54,88,0.14)');
-  g.addColorStop(1, 'rgba(0,0,0,0)');
-  cx.fillStyle = g;
-  cx.beginPath(); cx.arc(0, 0, dim * 0.30, 0, Math.PI * 2); cx.fill();
-
-  cx.shadowColor = 'rgba(255,126,92,0.8)';
-  cx.shadowBlur = 18;
-  for(let i = 0; i < 14; i++){
-    const a = (Math.PI * 2 / 14) * i + (i % 2 ? 0.16 : -0.09);
-    const outer = dim * (0.20 + (i % 4) * 0.06 + (i === 2 || i === 9 ? 0.12 : 0));
-    const side = dim * 0.05;
-    cx.fillStyle = i % 3 === 0 ? 'rgba(255,241,210,0.9)' : 'rgba(255,160,110,0.72)';
-    cx.beginPath();
-    cx.moveTo(Math.cos(a) * dim * 0.06, Math.sin(a) * dim * 0.06);
-    cx.lineTo(Math.cos(a - 0.09) * outer, Math.sin(a - 0.09) * outer);
-    cx.lineTo(Math.cos(a) * (outer + side), Math.sin(a) * (outer + side));
-    cx.lineTo(Math.cos(a + 0.08) * (outer * 0.78), Math.sin(a + 0.08) * (outer * 0.78));
-    cx.closePath();
-    cx.fill();
-  }
-
-  cx.shadowBlur = 0;
-  cx.strokeStyle = 'rgba(255,214,188,0.28)';
-  cx.lineWidth = 6;
-  cx.beginPath(); cx.arc(0, 0, dim * 0.18, 0, Math.PI * 2); cx.stroke();
-  return c;
-}
-
+// Bloom texture — pure soft radial glow, no spikes, mimics physical light bloom
 function makeBloomCanvas(){
-  const dim = 640;
-  const c = document.createElement('canvas');
-  c.width = dim; c.height = dim;
-  const cx = c.getContext('2d');
-  cx.translate(dim / 2, dim / 2);
-
-  const g = cx.createRadialGradient(0, 0, 0, 0, 0, dim * 0.5);
-  g.addColorStop(0,    'rgba(255,255,255,1)');
-  g.addColorStop(0.03, 'rgba(255,250,236,0.98)');
-  g.addColorStop(0.10, 'rgba(255,232,196,0.92)');
-  g.addColorStop(0.24, 'rgba(255,179,126,0.58)');
-  g.addColorStop(0.44, 'rgba(230,96,104,0.24)');
-  g.addColorStop(0.72, 'rgba(120,34,76,0.08)');
-  g.addColorStop(1,    'rgba(0,0,0,0)');
-  cx.fillStyle = g;
-  cx.beginPath(); cx.arc(0, 0, dim * 0.5, 0, Math.PI * 2); cx.fill();
-  return c;
-}
-
-function makeShellCanvas(){
   const dim = 512;
   const c = document.createElement('canvas');
   c.width = dim; c.height = dim;
   const cx = c.getContext('2d');
-  cx.translate(dim / 2, dim / 2);
+  cx.translate(dim/2, dim/2);
 
-  cx.globalCompositeOperation = 'lighter';
-  for(let layer = 0; layer < 3; layer++){
-    const phase = layer * 0.85;
-    const base = dim * (0.18 + layer * 0.026);
-    cx.beginPath();
-    for(let i = 0; i <= 96; i++){
-      const a = (i / 96) * Math.PI * 2;
-      const r = base * buildNoiseRadius(a, phase) * (layer === 0 ? 1.0 : 0.92 + layer * 0.04);
-      const x = Math.cos(a) * r;
-      const y = Math.sin(a) * r;
-      if(i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
-    }
-    cx.closePath();
-    cx.strokeStyle = layer === 0
-      ? 'rgba(255,236,205,0.72)'
-      : layer === 1
-        ? 'rgba(255,154,110,0.46)'
-        : 'rgba(226,72,94,0.22)';
-    cx.lineWidth = layer === 0 ? 10 : layer === 1 ? 14 : 22;
-    cx.shadowColor = layer === 0 ? 'rgba(255,214,170,0.62)' : 'rgba(255,100,96,0.42)';
-    cx.shadowBlur = layer === 0 ? 18 : 24;
-    cx.stroke();
-  }
-  return c;
-}
-
-function makeEmberCanvas(){
-  const dim = 96;
-  const c = document.createElement('canvas');
-  c.width = dim; c.height = dim;
-  const cx = c.getContext('2d');
-  cx.translate(dim / 2, dim / 2);
-  const g = cx.createRadialGradient(0, 0, 0, 0, 0, dim * 0.48);
-  g.addColorStop(0, 'rgba(255,255,255,0.98)');
-  g.addColorStop(0.12, 'rgba(255,220,180,0.95)');
-  g.addColorStop(0.34, 'rgba(255,138,98,0.66)');
-  g.addColorStop(0.72, 'rgba(220,70,92,0.10)');
-  g.addColorStop(1, 'rgba(0,0,0,0)');
-  cx.fillStyle = g;
-  cx.beginPath(); cx.arc(0, 0, dim * 0.48, 0, Math.PI * 2); cx.fill();
+  // Outer warm halo
+  const g2 = cx.createRadialGradient(0,0,0,0,0,dim*0.5);
+  g2.addColorStop(0,    'rgba(255,255,255,1)');
+  g2.addColorStop(0.04, 'rgba(255,252,240,0.98)');
+  g2.addColorStop(0.12, 'rgba(255,235,180,0.88)');
+  g2.addColorStop(0.28, 'rgba(255,180,140,0.55)');
+  g2.addColorStop(0.50, 'rgba(232,100,120,0.22)');
+  g2.addColorStop(0.75, 'rgba(140,40,80,0.07)');
+  g2.addColorStop(1,    'rgba(0,0,0,0)');
+  cx.fillStyle = g2;
+  cx.beginPath(); cx.arc(0,0,dim*0.5,0,Math.PI*2); cx.fill();
   return c;
 }
 
@@ -1255,80 +1189,25 @@ function getBloomTexture(){
   if(!bloomTexture) bloomTexture = new THREE.CanvasTexture(makeBloomCanvas());
   return bloomTexture;
 }
-function getShockTexture(){
-  if(!shockTexture) shockTexture = new THREE.CanvasTexture(makeShockBreakoutCanvas());
-  return shockTexture;
-}
-function getShellTexture(){
-  if(!shellTexture) shellTexture = new THREE.CanvasTexture(makeShellCanvas());
-  return shellTexture;
-}
-function getEmberTexture(){
-  if(!emberTexture) emberTexture = new THREE.CanvasTexture(makeEmberCanvas());
-  return emberTexture;
-}
 
-function makeEffectSprite(texture, pos, startScale, renderOrder=8){
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: texture,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    opacity: 0
-  }));
-  sprite.position.copy(pos);
-  sprite.scale.set(startScale, startScale, 1);
-  sprite.renderOrder = renderOrder;
-  scene.add(sprite);
-  return sprite;
-}
-
-function getExplosionBasis(pos){
-  const normal = pos.clone().normalize();
-  const up = Math.abs(normal.y) > 0.92 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
-  const tangentA = new THREE.Vector3().crossVectors(normal, up).normalize();
-  const tangentB = new THREE.Vector3().crossVectors(normal, tangentA).normalize();
-  return { normal, tangentA, tangentB };
-}
-
-function spawnSupernovaEmbers(pos, meta={}, opts={}){
-  const count = opts.count ?? 15;
-  const { normal, tangentA, tangentB } = getExplosionBasis(pos);
-  for(let i = 0; i < count; i++){
-    const a = (Math.PI * 2 * i) / count + (i % 2 ? 0.1 : -0.08);
-    const spread = 0.65 + (i % 4) * 0.12;
-    const outward = tangentA.clone().multiplyScalar(Math.cos(a) * spread)
-      .add(tangentB.clone().multiplyScalar(Math.sin(a) * spread))
-      .add(normal.clone().multiplyScalar((i % 3 === 0 ? 0.18 : 0.08)));
-    outward.normalize();
-    const sprite = makeEffectSprite(getEmberTexture(), pos, 0.18 + (i % 3) * 0.03, 9);
-    sprite.material.opacity = 0;
-    supernovaEmbers.push({
-      sprite,
-      origin: pos.clone(),
-      velocity: outward.multiplyScalar(opts.speed ?? (0.46 + (i % 5) * 0.05)),
-      drift: 0.86 + (i % 4) * 0.03,
-      twist: (i % 2 ? 1 : -1) * (0.28 + (i % 5) * 0.05),
-      start: performance.now() + (opts.delayStep ?? 20) * i,
-      duration: opts.duration ?? (780 + (i % 5) * 85),
-      startScale: 0.14 + (i % 4) * 0.03,
-      endScale: 0.42 + (i % 3) * 0.09,
-      opacityMul: opts.opacityMul ?? 0.72,
-      idx: meta.idx,
-      rowId: meta.rowId
-    });
-  }
-}
 
 function pushLiveNotice(memories) {
-  // memories can be strings or {idx, name} objects
   const list = Array.isArray(memories) ? memories : [memories];
   if (!list.length) return;
 
-  // Normalise to [{idx, name}]
   const items = list.map(item =>
     typeof item === 'string' ? { idx: null, name: item } : item
   );
+  const sig = items.map(item => `${item.idx ?? 'x'}:${item.name}`).join('|');
+  const nowKey = performance.now();
+  const lastSeen = recentLiveNoticeKeys.get(sig);
+  if (lastSeen && nowKey - lastSeen < 2200) return;
+  recentLiveNoticeKeys.set(sig, nowKey);
+  if (recentLiveNoticeKeys.size > 60) {
+    for (const [key, ts] of recentLiveNoticeKeys.entries()) {
+      if (nowKey - ts > 6000) recentLiveNoticeKeys.delete(key);
+    }
+  }
 
   const wrap = document.getElementById('live-notices');
   if (!wrap) return;
@@ -1340,21 +1219,20 @@ function pushLiveNotice(memories) {
   const bodyHtml = single
     ? `<div class="live-notice-body"><strong>${items[0].name}</strong> just appeared in the sky.${
         items[0].idx !== null
-          ? '<br><span class="live-notice-nav">tap to fly there \u2197</span>'
+          ? '<br><span class="live-notice-nav">tap to fly there ↗</span>'
           : ''
       }</div>`
     : `<div class="live-notice-body">${items.length} new memories just appeared in the sky.</div>
        <ul class="live-notice-list">${items.map(m => `<li>${m.name}</li>`).join('')}</ul>
-       ${items.find(m => m.idx !== null) ? '<span class="live-notice-nav">tap to fly to the first one \u2197</span>' : ''}`;
+       ${items.find(m => m.idx !== null) ? '<span class="live-notice-nav">tap to fly to the first one ↗</span>' : ''}`;
 
   card.innerHTML = `
     <div class="live-notice-head">
-      <span class="live-notice-title">new memory unlocked \u2726</span>
-      <button class="live-notice-close" aria-label="dismiss">\u2715</button>
+      <span class="live-notice-title">new memory unlocked ✦</span>
+      <button class="live-notice-close" aria-label="dismiss">✕</button>
     </div>
     ${bodyHtml}`;
 
-  // Dismiss button
   card.querySelector('.live-notice-close').addEventListener('click', e => {
     e.stopPropagation();
     card.style.transition = 'opacity .25s ease';
@@ -1362,7 +1240,6 @@ function pushLiveNotice(memories) {
     setTimeout(() => card.remove(), 260);
   });
 
-  // Click card body to fly to the star
   const navTarget = single
     ? items[0]
     : items.find(m => m.idx !== null);
@@ -1381,6 +1258,7 @@ function pushLiveNotice(memories) {
   wrap.prepend(card);
   if (window._dbg) window._dbg('notice', { names: items.map(m => m.name) });
 }
+
 
 // Pan to a new star, then after the camera lands trigger the supernova + fade-in
 function revealNewStarWithPan(idx) {
@@ -1433,36 +1311,47 @@ function queueNewStarReveal(idx){
   const sp = sprites[idx], rg = rings[idx];
   if(!sp || !rg) return;
 
-  // Hide until the breakout settles.
+  // Star is invisible until phase 3
   sp.userData.reveal = 0; rg.userData.reveal = 0;
   sp.material.opacity = 0; rg.material.opacity = 0;
 
   const pos = sp.position.clone();
   const now = performance.now();
 
-  const shock = makeEffectSprite(getShockTexture(), pos, 0.12, 10);
-  supernovaShocks.push({ sprite: shock, idx, start: now, duration: 320, maxScale: 5.8, opacityMul: 1.08 });
+  // ── Phase 1: Bloom (soft expanding light, 0–700ms) ───────────────────────
+  const bloom = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: getBloomTexture(),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0
+  }));
+  bloom.position.copy(pos);
+  bloom.scale.set(0.1, 0.1, 1);
+  bloom.renderOrder = 7;
+  scene.add(bloom);
+  supernovaBloom.push({ sprite: bloom, idx, start: now, duration: 1800, maxScale: 7.2, opacityMul: 0.98 });
 
-  const bloom = makeEffectSprite(getBloomTexture(), pos, 0.10, 7);
-  supernovaBloom.push({ sprite: bloom, idx, start: now, duration: 1900, maxScale: 9.2, opacityMul: 0.84 });
-
-  spawnSupernovaEmbers(pos, { idx }, { count: 16, speed: 0.58, duration: 980, opacityMul: 0.76, delayStep: 18 });
-
+  // ── Phase 2: Spiky burst (starts at 400ms, 400–1800ms) ───────────────────
   setTimeout(() => {
-    const shell = makeEffectSprite(getShellTexture(), pos, 0.16, 8);
-    shell.material.rotation = Math.PI * 0.08;
-    supernovaShells.push({ sprite: shell, idx, start: performance.now(), duration: 1700, maxScale: 8.6, opacityMul: 0.78, rotSpeed: 0.55 });
-  }, 120);
+    const burst = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: getSupernovaTexture(),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      opacity: 0
+    }));
+    burst.position.copy(pos);
+    burst.scale.set(0.15, 0.15, 1);
+    burst.renderOrder = 8;
+    scene.add(burst);
+    supernovaBursts.push({ sprite: burst, idx, start: performance.now(), duration: 1400, maxScale: 4.8, opacityMul: 1.0 });
+  }, 400);
 
+  // ── Phase 3: Star fades in (starts at 1100ms) ────────────────────────────
   setTimeout(() => {
-    const burst = makeEffectSprite(getSupernovaTexture(), pos, 0.18, 9);
-    burst.material.rotation = -Math.PI * 0.06;
-    supernovaBursts.push({ sprite: burst, idx, start: performance.now(), duration: 1280, maxScale: 6.2, opacityMul: 0.96, rotSpeed: -0.75 });
-  }, 90);
-
-  setTimeout(() => {
-    newStarAnimations.push({ idx, start: performance.now(), duration: 1300 });
-  }, 880);
+    newStarAnimations.push({ idx, start: performance.now(), duration: 1200 });
+  }, 1100);
 }
 
 function findMemoryIndexByRowId(rowId){
@@ -1479,6 +1368,7 @@ function queueStarDeletionByRowId(rowId){
   const key = String(rowId);
   if (removingRowIds.has(key)) return;
 
+  // If the 3-D scene isn't ready yet, retry shortly — the star will still be there.
   if (typeof scene === 'undefined' || !scene) {
     setTimeout(() => queueStarDeletionByRowId(rowId), 500);
     return;
@@ -1497,31 +1387,38 @@ function queueStarDeletionByRowId(rowId){
   const pos = sp.position.clone();
   const now = performance.now();
 
-  const shock = makeEffectSprite(getShockTexture(), pos, 0.14, 10);
-  supernovaShocks.push({ sprite: shock, idx, rowId, start: now, duration: 280, maxScale: 5.0, opacityMul: 0.92 });
-
-  const bloom = makeEffectSprite(getBloomTexture(), pos, 0.12, 7);
-  supernovaBloom.push({ sprite: bloom, idx, rowId, start: now, duration: 1650, maxScale: 10.2, opacityMul: 0.90 });
-
-  spawnSupernovaEmbers(pos, { idx, rowId }, { count: 14, speed: 0.54, duration: 900, opacityMul: 0.70, delayStep: 14 });
-
-  setTimeout(() => {
-    const liveIdx = findMemoryIndexByRowId(rowId);
-    const liveSp = liveIdx >= 0 ? sprites[liveIdx] : null;
-    const burst = makeEffectSprite(getSupernovaTexture(), liveSp ? liveSp.position : pos, 0.22, 9);
-    burst.material.rotation = Math.PI * 0.12;
-    supernovaBursts.push({ sprite: burst, idx: liveIdx >= 0 ? liveIdx : idx, rowId, start: performance.now(), duration: 1150, maxScale: 6.7, opacityMul: 0.98, rotSpeed: 0.88 });
-  }, 120);
+  const bloom = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: getBloomTexture(),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0
+  }));
+  bloom.position.copy(pos);
+  bloom.scale.set(0.12, 0.12, 1);
+  bloom.renderOrder = 7;
+  scene.add(bloom);
+  supernovaBloom.push({ sprite: bloom, idx, rowId, start: now, duration: 1500, maxScale: 8.8, opacityMul: 1.0 });
 
   setTimeout(() => {
     const liveIdx = findMemoryIndexByRowId(rowId);
     const liveSp = liveIdx >= 0 ? sprites[liveIdx] : null;
-    const shell = makeEffectSprite(getShellTexture(), liveSp ? liveSp.position : pos, 0.18, 8);
-    shell.material.rotation = -Math.PI * 0.05;
-    supernovaShells.push({ sprite: shell, idx: liveIdx >= 0 ? liveIdx : idx, rowId, start: performance.now(), duration: 1400, maxScale: 9.4, opacityMul: 0.74, rotSpeed: -0.62 });
-  }, 160);
+    const burst = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: getSupernovaTexture(),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      opacity: 0
+    }));
+    if (liveSp) burst.position.copy(liveSp.position);
+    else burst.position.copy(pos);
+    burst.scale.set(0.2, 0.2, 1);
+    burst.renderOrder = 8;
+    scene.add(burst);
+    supernovaBursts.push({ sprite: burst, idx: liveIdx >= 0 ? liveIdx : idx, rowId, start: performance.now(), duration: 1200, maxScale: 5.8, opacityMul: 1.05 });
+  }, 140);
 
-  starRemovalAnimations.push({ rowId, start: now + 70, duration: 760 });
+  starRemovalAnimations.push({ rowId, start: now + 80, duration: 760 });
   setTimeout(() => finalizeStarRemovalByRowId(rowId), 980);
 }
 
@@ -1652,102 +1549,46 @@ function updateNewStarAnimations(now){
     }
   }
 
-  for(let i = supernovaShocks.length - 1; i >= 0; i--){
-    const s = supernovaShocks[i];
-    const p = Math.min(1, Math.max(0, (now - s.start) / s.duration));
-    const liveIdx = s.rowId != null ? findMemoryIndexByRowId(s.rowId) : s.idx;
-    const sp = liveIdx >= 0 ? sprites[liveIdx] : sprites[s.idx];
-    if(sp) s.sprite.position.copy(sp.position);
-    const scale = 0.14 + (1 - Math.pow(1 - p, 2)) * (s.maxScale ?? 5.2);
-    const fade = p < 0.18 ? 1 : Math.pow(1 - ((p - 0.18) / 0.82), 2.4);
-    s.sprite.scale.set(scale, scale, 1);
-    s.sprite.material.opacity = Math.max(0, fade) * (s.opacityMul ?? 1.0);
-    if(p >= 1){
-      scene.remove(s.sprite); s.sprite.material.dispose();
-      supernovaShocks.splice(i,1);
-    }
-  }
-
-  for(let i = supernovaShells.length - 1; i >= 0; i--){
-    const s = supernovaShells[i];
-    const p = Math.min(1, Math.max(0, (now - s.start) / s.duration));
-    const liveIdx = s.rowId != null ? findMemoryIndexByRowId(s.rowId) : s.idx;
-    const sp = liveIdx >= 0 ? sprites[liveIdx] : sprites[s.idx];
-    if(sp) s.sprite.position.copy(sp.position);
-    const ease = 1 - Math.pow(1 - p, 2.2);
-    const scale = 0.14 + ease * (s.maxScale ?? 8.2);
-    const fade = p < 0.12 ? (p / 0.12) * 0.9 : Math.pow(1 - ((p - 0.12) / 0.88), 1.45);
-    s.sprite.scale.set(scale, scale, 1);
-    s.sprite.material.opacity = Math.max(0, fade) * (s.opacityMul ?? 0.7);
-    s.sprite.material.rotation += (s.rotSpeed ?? 0.3) * 0.0025;
-    if(p >= 1){
-      scene.remove(s.sprite); s.sprite.material.dispose();
-      supernovaShells.splice(i,1);
-    }
-  }
-
   for(let i = supernovaBursts.length - 1; i >= 0; i--){
     const b = supernovaBursts[i];
-    const p = Math.min(1, Math.max(0, (now - b.start) / b.duration));
-    const easeOut = 1 - Math.pow(1 - p, 2.8);
-    const scale = 0.18 + easeOut * (b.maxScale ?? 5.4);
-    const fade  = p < 0.15 ? 1 : Math.pow(1 - ((p - 0.15) / 0.85), 1.8);
+    const p = Math.min(1, (now - b.start) / b.duration);
+    const easeOut = 1 - Math.pow(1 - p, 3);
+    const scale = 0.18 + easeOut * (b.maxScale ?? 4.8);
+    const fade  = Math.pow(1 - p, 2);
     const liveIdx = b.rowId != null ? findMemoryIndexByRowId(b.rowId) : b.idx;
     const sp = liveIdx >= 0 ? sprites[liveIdx] : sprites[b.idx];
     if(sp) b.sprite.position.copy(sp.position);
     b.sprite.scale.set(scale, scale, 1);
-    b.sprite.material.opacity = Math.max(0, fade) * (b.opacityMul ?? 0.92);
-    b.sprite.material.rotation += (b.rotSpeed ?? 0) * 0.0026;
+    b.sprite.material.opacity = fade * (b.opacityMul ?? 0.92);
     if(p >= 1){
       scene.remove(b.sprite); b.sprite.material.dispose();
       supernovaBursts.splice(i,1);
     }
   }
 
-  for(let i = supernovaEmbers.length - 1; i >= 0; i--){
-    const e = supernovaEmbers[i];
-    const pRaw = (now - e.start) / e.duration;
-    if(pRaw < 0) continue;
-    const p = Math.min(1, pRaw);
-    const travel = 1 - Math.pow(1 - p, 1.4);
-    const drag = 1 - Math.pow(p, e.drift ?? 0.9) * 0.35;
-    const offset = e.velocity.clone().multiplyScalar(travel * drag);
-    const swirl = new THREE.Vector3(-e.velocity.z, e.velocity.y * 0.15, e.velocity.x)
-      .normalize()
-      .multiplyScalar((e.twist ?? 0.2) * Math.sin(p * Math.PI));
-    e.sprite.position.copy(e.origin).add(offset).add(swirl);
-    const scale = (e.startScale ?? 0.18) + (e.endScale ?? 0.5) * p;
-    const fade = p < 0.12 ? p / 0.12 : Math.pow(1 - ((p - 0.12) / 0.88), 1.65);
-    e.sprite.scale.set(scale, scale, 1);
-    e.sprite.material.opacity = Math.max(0, fade) * (e.opacityMul ?? 0.72);
-    if(p >= 1){
-      scene.remove(e.sprite); e.sprite.material.dispose();
-      supernovaEmbers.splice(i,1);
-    }
-  }
-
+  // Phase 1 bloom update
   for(let i = supernovaBloom.length - 1; i >= 0; i--){
     const b = supernovaBloom[i];
-    const p = Math.min(1, Math.max(0, (now - b.start) / b.duration));
+    const p = Math.min(1, (now - b.start) / b.duration);
     const liveIdx = b.rowId != null ? findMemoryIndexByRowId(b.rowId) : b.idx;
     const sp = liveIdx >= 0 ? sprites[liveIdx] : sprites[b.idx];
     if(sp) b.sprite.position.copy(sp.position);
 
     let opacity;
-    if(p < 0.04){
-      opacity = p / 0.04;
-    } else if(p < 0.16){
+    if(p < 0.05){
+      opacity = p / 0.05;
+    } else if(p < 0.20){
       opacity = 1.0;
     } else {
-      const dp = (p - 0.16) / 0.84;
-      opacity = Math.pow(1 - dp, 1.55);
+      const dp = (p - 0.20) / 0.80;
+      opacity = Math.pow(1 - dp, 1.6);
     }
 
-    const expandEase = 1 - Math.pow(1 - Math.min(p / 0.42, 1), 2);
-    const scale = 0.08 + expandEase * (b.maxScale ?? 6.6);
+    const expandEase = 1 - Math.pow(1 - Math.min(p / 0.35, 1), 2);
+    const scale = 0.06 + expandEase * (b.maxScale ?? 5.5);
 
     b.sprite.scale.set(scale, scale, 1);
-    b.sprite.material.opacity = Math.max(0, opacity) * (b.opacityMul ?? 0.84);
+    b.sprite.material.opacity = opacity * (b.opacityMul ?? 0.88);
 
     if(p >= 1){
       scene.remove(b.sprite); b.sprite.material.dispose();
@@ -1934,6 +1775,29 @@ async function enterSky(){
   },1400);
 }
 
+function bootEditorPreviewMode(){
+  if (!IS_EDITOR_PREVIEW) return;
+  const intro = document.getElementById('intro');
+  const loader = document.getElementById('loader');
+  const loading = document.getElementById('loading-screen');
+  const skyEl = document.getElementById('sky');
+  if (intro) intro.style.display = 'none';
+  if (loader) loader.style.display = 'none';
+  if (loading) loading.classList.remove('active');
+  if (skyEl) skyEl.style.display = 'block';
+  const cvs = document.getElementById('sky-canvas');
+  if (cvs) {
+    cvs.width = window.innerWidth;
+    cvs.height = window.innerHeight;
+    cvs.style.width = window.innerWidth + 'px';
+    cvs.style.height = window.innerHeight + 'px';
+  }
+  requestAnimationFrame(()=>{ requestAnimationFrame(async ()=>{
+    await refreshRemoteMemories(false);
+    initThree();
+  }); });
+}
+
 function initThree(){
   const W=window.innerWidth,H=window.innerHeight;
   const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || W < 900;
@@ -1971,9 +1835,11 @@ function initThree(){
   raycaster=new THREE.Raycaster(); mouse=new THREE.Vector2();
   buildStarLabels();
   setupEvents();
+  startPreviewSync();
   animate();
   startLivePolling();
   refreshRemoteMemories(true);
+  if (_pendingPreviewDraft) applyPreviewDraft(_pendingPreviewDraft);
   window.addEventListener('resize',onResize);
 }
 
@@ -2122,6 +1988,7 @@ function updateShooters(dt,now){
 }
 
 // ─── MEMORY STARS ────────────────────────────────────────────────────────────
+
 function buildMemoryStars(){
   hitboxes=[]; sprites={}; rings={};
   MEMORIES.forEach((m,idx)=>{
@@ -2130,25 +1997,31 @@ function buildMemoryStars(){
     const y=R*Math.cos(m.phi);
     const z=R*Math.sin(m.phi)*Math.sin(m.theta);
     const rgb=TYPE_HEX[m.type];
+    const tier = getStarHierarchy(m.sz);
+    const scaleCfg = tier === 'milestone'
+      ? { sprite: 0.30, ring: 0.64, hit: 0.74 }
+      : tier === 'keepsake'
+        ? { sprite: 0.27, ring: 0.58, hit: 0.69 }
+        : { sprite: 0.24, ring: 0.52, hit: 0.65 };
 
     const sp=new THREE.Sprite(new THREE.SpriteMaterial({
-      map:new THREE.CanvasTexture(makeStar2DCanvas(m.sz,rgb,false)),
+      map:new THREE.CanvasTexture(makeStar2DCanvas(m.sz,rgb,false,tier)),
       transparent:true,blending:THREE.AdditiveBlending,depthWrite:false
     }));
     sp.position.set(x,y,z);
-    const sc=m.sz*.24; sp.scale.set(sc,sc,1);
-    sp.userData={idx}; scene.add(sp); sprites[idx]=sp;
+    const sc=m.sz*scaleCfg.sprite; sp.scale.set(sc,sc,1);
+    sp.userData={idx, tier}; scene.add(sp); sprites[idx]=sp;
 
     const rg=new THREE.Sprite(new THREE.SpriteMaterial({
-      map:new THREE.CanvasTexture(makeStar2DCanvas(m.sz,rgb,true)),
+      map:new THREE.CanvasTexture(makeStar2DCanvas(m.sz,rgb,true,tier)),
       transparent:true,blending:THREE.AdditiveBlending,depthWrite:false
     }));
     rg.position.set(x,y,z);
-    const rsc=m.sz*.52; rg.scale.set(rsc,rsc,1);
-    rg.userData={isRing:true,idx}; scene.add(rg); rings[idx]=rg;
+    const rsc=m.sz*scaleCfg.ring; rg.scale.set(rsc,rsc,1);
+    rg.userData={isRing:true,idx, tier}; scene.add(rg); rings[idx]=rg;
 
     const hb=new THREE.Mesh(
-      new THREE.SphereGeometry(m.sz*.65,8,8),
+      new THREE.SphereGeometry(m.sz*scaleCfg.hit,8,8),
       new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false})
     );
     hb.position.set(x,y,z); hb.userData={idx}; scene.add(hb); hitboxes.push(hb);
@@ -2216,11 +2089,11 @@ function buildConstellationLines() {
 // Call after a star is discovered to potentially brighten its lines
 function updateConstellationAlpha(t) {
   if (!constellationLines) return;
-  // Pulse gently with time, slightly brighter if more stars discovered
-  const discoveredRatio = visited.size / MEMORIES.length;
-  const pulse = 0.18 + 0.06 * Math.sin(t * 0.5);
-  const boost = discoveredRatio * 0.18;
-  constellationLines.material.opacity = pulse + boost;
+  const discoveredRatio = visited.size / Math.max(1, MEMORIES.length);
+  const pulse = 0.17 + 0.05 * Math.sin(t * 0.45);
+  const shimmer = 0.025 * Math.sin(t * 1.4 + 0.8);
+  const boost = discoveredRatio * 0.16;
+  constellationLines.material.opacity = pulse + shimmer + boost;
 }
 
 // ─── STAR TRAIL SYSTEM ───────────────────────────────────────────────────────
@@ -2440,22 +2313,47 @@ function animate(now=0){
   // Memory star pulse
   Object.keys(sprites).forEach(idx=>{
     const sp=sprites[idx],m=MEMORIES[idx];
-    const pulse=1+.18*Math.sin(t*1.1+idx*1.7);
+    const tier = sp.userData.tier || getStarHierarchy(m.sz);
+    const cfg = tier === 'milestone'
+      ? { pulse: 0.24, base: 0.30, min: 0.74 }
+      : tier === 'keepsake'
+        ? { pulse: 0.18, base: 0.27, min: 0.70 }
+        : { pulse: 0.12, base: 0.24, min: 0.66 };
+    const pulse=1+cfg.pulse*Math.sin(t*1.1+idx*1.7);
     const reveal = sp.userData.reveal ?? 1;
-    const appearScale = 0.35 + reveal * 0.65;
-    const base=m.sz*.24;
+    const appearScale = cfg.min + reveal * (1 - cfg.min);
+    const base=m.sz*cfg.base;
     sp.scale.set(base*pulse*appearScale,base*pulse*appearScale,1);
     sp.material.opacity = Math.max(sp.material.opacity ?? 1, reveal);
   });
   Object.keys(rings).forEach(idx=>{
     const rg=rings[idx],m=MEMORIES[idx];
-    const pulse=1+.10*Math.sin(t*.7+idx*2.1);
+    const tier = rg.userData.tier || getStarHierarchy(m.sz);
+    const cfg = tier === 'milestone'
+      ? { pulse: 0.15, base: 0.64, op: 0.98, min: 0.58 }
+      : tier === 'keepsake'
+        ? { pulse: 0.11, base: 0.58, op: 0.90, min: 0.52 }
+        : { pulse: 0.08, base: 0.52, op: 0.82, min: 0.48 };
+    const pulse=1+cfg.pulse*Math.sin(t*.7+idx*2.1);
     const reveal = rg.userData.reveal ?? 1;
-    const appearScale = 0.45 + reveal * 0.55;
-    const rbase=m.sz*.52;
+    const appearScale = cfg.min + reveal * (1 - cfg.min);
+    const rbase=m.sz*cfg.base;
     rg.scale.set(rbase*pulse*appearScale,rbase*pulse*appearScale,1);
-    rg.material.opacity = Math.max(0.92 * reveal, rg.material.opacity ?? 0.92);
+    rg.material.opacity = Math.max(cfg.op * reveal, rg.material.opacity ?? cfg.op);
   });
+
+  if (previewDraftState.active && previewDraftState.sprite && previewDraftState.ring) {
+    previewPulseClock += dt;
+    const size = Math.max(1.45, Number(previewDraftState.payload?.sz || 1.8));
+    const tier = getStarHierarchy(size);
+    const sBase = size * (tier === 'milestone' ? 0.31 : tier === 'keepsake' ? 0.28 : 0.25);
+    const rBase = size * (tier === 'milestone' ? 0.64 : tier === 'keepsake' ? 0.58 : 0.52);
+    const p1 = 1 + (tier === 'milestone' ? 0.18 : 0.12) * Math.sin(t * 1.5 + 0.4);
+    const p2 = 1 + (tier === 'milestone' ? 0.10 : 0.07) * Math.sin(t * 0.9 + 1.0);
+    previewDraftState.sprite.scale.set(sBase * p1, sBase * p1, 1);
+    previewDraftState.ring.scale.set(rBase * p2, rBase * p2, 1);
+    if (previewDraftState.line) previewDraftState.line.material.opacity = 0.18 + 0.10 * Math.sin(t * 1.2);
+  }
 
   updateStarTrails();
 
@@ -2793,6 +2691,12 @@ function startLivePolling() {
 let _supabaseLiveChannel = null;
 let _crossTabMemoryBus = null;
 const crossTabMemoryChannel = 'dolcetta-memory-live';
+const previewMemoryChannel = 'dolcetta-editor-preview';
+const IS_EDITOR_PREVIEW = new URLSearchParams(location.search).get('editor_preview') === '1';
+let _previewBus = null;
+let _pendingPreviewDraft = null;
+let previewDraftState = { active:false, payload:null, sprite:null, ring:null, line:null };
+const recentLiveNoticeKeys = new Map();
 
 function startSupabaseRealtime(){
   if (_supabaseLiveChannel) return;
@@ -2852,6 +2756,9 @@ function startCrossTabMemorySync(){
 // ─── BOOT ────────────────────────────────────────────────────────────────────
 paintIntroSky();
 nextShooterAt=performance.now()+5000;
+if (IS_EDITOR_PREVIEW) {
+  window.addEventListener('load', () => setTimeout(bootEditorPreviewMode, 60), { once: true });
+}
 
 // Fetched data — stored here, applied after initThree() builds the scene
 let _pendingExtra = [], _pendingBuiltinConns = {};
@@ -3083,11 +2990,10 @@ function applyConnectionsAndCluster() {
     if (revealNow.length) pushLiveNotice(revealNow.map(({ idx, name }) => ({ idx, name })));
   }
 
-  // ── Cluster connected chains far from each other ──────────────────────────
-  const CLUSTER_ARC = 0.38;  // max arc between chained stars (~22°)
-  const MIN_SEP     = 0.32;  // minimum angular gap between any two stars
-  const CHAIN_SEP   = 1.0;   // minimum angular gap between *chain anchors* (~57°)
-  const rngC = seededRng(9999);
+  // ── Keep connected added memories closer to the stars they belong to ──────
+  const CONNECTED_ARC = 0.16;
+  const CONNECTED_MIN_SEP = 0.20;
+  const rngC = seededRng(9999 + MEMORIES.length);
 
   function angBetween(a, b) {
     const dot = a.ux*b.ux + a.uy*b.uy + a.uz*b.uz;
@@ -3098,26 +3004,27 @@ function applyConnectionsAndCluster() {
              uy: Math.cos(m.phi),
              uz: Math.sin(m.phi)*Math.sin(m.theta) };
   }
-  function randNear(ux, uy, uz, maxArc) {
+  function randNear(anchor, maxArc, minArc = 0.035) {
     let ax, ay, az;
-    if (Math.abs(ux) < 0.9) { ax=0; ay=-uz; az=uy; } else { ax=-uy; ay=ux; az=0; }
-    const len = Math.sqrt(ax*ax+ay*ay+az*az);
+    if (Math.abs(anchor.ux) < 0.9) { ax = 0; ay = -anchor.uz; az = anchor.uy; }
+    else { ax = -anchor.uy; ay = anchor.ux; az = 0; }
+    const len = Math.sqrt(ax*ax + ay*ay + az*az) || 1;
     ax/=len; ay/=len; az/=len;
     const azimuth = rngC() * Math.PI * 2;
     const c=Math.cos(azimuth), s=Math.sin(azimuth);
-    const dot=ax*ux+ay*uy+az*uz;
-    const perx=ax*c+s*(uy*az-uz*ay)+dot*(1-c)*ux;
-    const pery=ay*c+s*(uz*ax-ux*az)+dot*(1-c)*uy;
-    const perz=az*c+s*(ux*ay-uy*ax)+dot*(1-c)*uz;
-    const arc = rngC() * maxArc;
+    const dot=ax*anchor.ux+ay*anchor.uy+az*anchor.uz;
+    const perx=ax*c+s*(anchor.uy*az-anchor.uz*ay)+dot*(1-c)*anchor.ux;
+    const pery=ay*c+s*(anchor.uz*ax-anchor.ux*az)+dot*(1-c)*anchor.uy;
+    const perz=az*c+s*(anchor.ux*ay-anchor.uy*ax)+dot*(1-c)*anchor.uz;
+    const arc = minArc + rngC() * Math.max(0.001, maxArc - minArc);
     const ca=Math.cos(arc), sa=Math.sin(arc);
-    const nx=ux*ca+perx*sa, ny=uy*ca+pery*sa, nz=uz*ca+perz*sa;
-    const nl=Math.sqrt(nx*nx+ny*ny+nz*nz);
+    const nx=anchor.ux*ca+perx*sa, ny=anchor.uy*ca+pery*sa, nz=anchor.uz*ca+perz*sa;
+    const nl=Math.sqrt(nx*nx+ny*ny+nz*nz) || 1;
     return { ux:nx/nl, uy:ny/nl, uz:nz/nl };
   }
 
   function moveStar(idx, phi, theta) {
-    MEMORIES[idx].phi   = phi;
+    MEMORIES[idx].phi = phi;
     MEMORIES[idx].theta = theta;
     const R = 16;
     const x = R*Math.sin(phi)*Math.cos(theta);
@@ -3129,91 +3036,41 @@ function applyConnectionsAndCluster() {
     if (hb) hb.position.set(x, y, z);
   }
 
-  // Collect all chains (walk connectTo links from roots)
-  const pointedAt = new Set();
-  MEMORIES.forEach(m => { if (m.connectTo !== undefined) pointedAt.add(m.connectTo); });
-
-  const chains = [];
-  MEMORIES.forEach((m, rootIdx) => {
-    if (pointedAt.has(rootIdx) || m.connectTo === undefined) return;
-    const chain = [rootIdx];
-    let cur = m.connectTo;
-    const seen2 = new Set([rootIdx]);
-    while (cur !== undefined && !seen2.has(cur) && MEMORIES[cur]) {
-      chain.push(cur); seen2.add(cur); cur = MEMORIES[cur].connectTo;
+  function canPlaceExtra(idx, cand) {
+    for (let j = 0; j < MEMORIES.length; j++) {
+      if (j === idx) continue;
+      const other = MEMORIES[j];
+      if (!other) continue;
+      const ang = angBetween(cand, toUV(other));
+      const dynamicSep = CONNECTED_MIN_SEP + ((MEMORIES[idx].sz || 1.8) + (other.sz || 1.8)) * 0.02;
+      if (ang < dynamicSep) return false;
     }
-    if (chain.length >= 2) chains.push(chain);
-  });
+    return true;
+  }
 
-  // Track placed chain anchor positions for separation
-  const chainAnchors = [];
-
-  chains.forEach(chain => {
-    const rootIdx = chain[0];
-    const rootUV  = toUV(MEMORIES[rootIdx]);
-
-    // Try to place root anchor far from other chain anchors
-    let bestAnchor = rootUV;
-    let bestScore  = -1;
-    for (let attempt = 0; attempt < 800; attempt++) {
-      const uy2 = 1 - 2 * rngC();
-      const r2  = Math.sqrt(1 - uy2*uy2);
-      const t2  = rngC() * Math.PI * 2;
-      const cand = { ux: r2*Math.cos(t2), uy: uy2, uz: r2*Math.sin(t2) };
-
-      // Must be far from all other chain anchors
-      let farEnough = true;
-      for (const a of chainAnchors) {
-        if (angBetween(cand, a) < CHAIN_SEP) { farEnough = false; break; }
-      }
-      if (!farEnough) continue;
-
-      // Must not be too close to any existing star
-      let clearOfStars = true;
-      for (let j = 0; j < MEMORIES.length; j++) {
-        if (chain.includes(j)) continue;
-        if (angBetween(cand, toUV(MEMORIES[j])) < MIN_SEP) { clearOfStars = false; break; }
-      }
-      if (!clearOfStars) continue;
-
-      // Score by distance from nearest chain anchor (farther = better)
-      let minDist = Math.PI;
-      for (const a of chainAnchors) minDist = Math.min(minDist, angBetween(cand, a));
-      if (minDist > bestScore) { bestScore = minDist; bestAnchor = cand; }
-      if (bestScore > CHAIN_SEP * 1.5) break; // good enough
-    }
-
-    // Move root to bestAnchor
-    if (bestScore > 0) {
-      const phi   = Math.acos(Math.max(-1, Math.min(1, bestAnchor.uy)));
-      const theta = Math.atan2(bestAnchor.uz, bestAnchor.ux);
-      moveStar(rootIdx, phi, theta);
-    }
-    chainAnchors.push(toUV(MEMORIES[rootIdx]));
-
-    // Place each subsequent chain member near the previous
-    for (let ci = 1; ci < chain.length; ci++) {
-      const anchor  = toUV(MEMORIES[chain[ci - 1]]);
-      const thisIdx = chain[ci];
+  for (let pass = 0; pass < 3; pass++) {
+    const maxArc = pass === 0 ? 0.10 : pass === 1 ? 0.13 : CONNECTED_ARC;
+    for (let idx = MEMORIES_DATA.length; idx < MEMORIES.length; idx++) {
+      const targetIdx = MEMORIES[idx].connectTo;
+      if (!Number.isInteger(targetIdx) || targetIdx < 0 || targetIdx >= MEMORIES.length || targetIdx === idx) continue;
+      const anchor = toUV(MEMORIES[targetIdx]);
       let placed = false;
-      for (let attempt = 0; attempt < 800; attempt++) {
-        const cand = randNear(anchor.ux, anchor.uy, anchor.uz, CLUSTER_ARC);
-        let ok = true;
-        for (let j = 0; j < MEMORIES.length; j++) {
-          if (j === thisIdx) continue;
-          const ang = angBetween(cand, toUV(MEMORIES[j]));
-          if (ang < MIN_SEP + (MEMORIES[thisIdx].sz + MEMORIES[j].sz) * 0.03) { ok = false; break; }
-        }
-        if (ok) {
-          const phi   = Math.acos(Math.max(-1, Math.min(1, cand.uy)));
-          const theta = Math.atan2(cand.uz, cand.ux);
-          moveStar(thisIdx, phi, theta);
-          placed = true;
-          break;
-        }
+      for (let attempt = 0; attempt < 360; attempt++) {
+        const cand = randNear(anchor, maxArc, 0.035 + pass * 0.01);
+        if (!canPlaceExtra(idx, cand)) continue;
+        const phi = Math.acos(Math.max(-1, Math.min(1, cand.uy)));
+        const theta = Math.atan2(cand.uz, cand.ux);
+        moveStar(idx, phi, theta);
+        placed = true;
+        break;
+      }
+      if (!placed && pass === 2) {
+        const phi = Math.acos(Math.max(-1, Math.min(1, anchor.uy)));
+        const theta = Math.atan2(anchor.uz, anchor.ux);
+        moveStar(idx, phi, theta);
       }
     }
-  });
+  }
 
   // Draw lines (deduped, only between stars that actually have connectTo set)
   buildConstellationLines();
@@ -3351,11 +3208,7 @@ function applyConnectionsAndCluster() {
     // Scene
     const sceneOk  = typeof scene   !== 'undefined' && !!scene;
     const spriteC  = typeof sprites !== 'undefined' ? Object.keys(sprites).length : 0;
-    const burstC   = (typeof supernovaBursts !== 'undefined' ? supernovaBursts.length : 0)
-      + (typeof supernovaShocks !== 'undefined' ? supernovaShocks.length : 0)
-      + (typeof supernovaShells !== 'undefined' ? supernovaShells.length : 0)
-      + (typeof supernovaBloom !== 'undefined' ? supernovaBloom.length : 0)
-      + (typeof supernovaEmbers !== 'undefined' ? supernovaEmbers.length : 0);
+    const burstC   = typeof supernovaBursts !== 'undefined' ? supernovaBursts.length : 0;
     const noticeC  = document.querySelectorAll('.live-notice').length;
     set('dbg-scene-ready', sceneOk ? 'yes ✓' : 'not yet', sceneOk ? 'green' : 'yellow');
     set('dbg-sprites',     spriteC, spriteC > 0 ? 'green' : 'dim');
