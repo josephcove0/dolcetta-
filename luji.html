@@ -233,7 +233,7 @@ html, body { min-height:100%; background:#00010f; font-family:'Georgia',serif; c
         </div>
         <div id="status"></div>
         <div class="preview-card">
-          <iframe id="live-preview-frame" class="preview-frame" loading="lazy" referrerpolicy="same-origin"></iframe>
+          <iframe id="live-preview-frame" class="preview-frame" loading="eager" referrerpolicy="same-origin"></iframe>
         </div>
       </div>
     </div>
@@ -287,7 +287,11 @@ function tryPw(){
   $('s-admin').style.display = 'block';
   openTab('create');
   const frame = $('live-preview-frame');
-  if (frame) frame.src = './index.html?editor_preview=1';
+  if (frame) {
+    frame.removeAttribute('loading');
+    frame.src = './index.html?embed_preview=1&v=' + Date.now();
+    frame.addEventListener('load', () => { postPreviewDraft(); }, { once: true });
+  }
   loadMemories();
   startAdminLiveSync();
   setupPreviewBindings();
