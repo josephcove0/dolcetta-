@@ -515,12 +515,22 @@ async function saveMemory(){
 
   try {
     if (editingId) {
-      const { error } = await sb.from('memories').update(payload).eq('id', editingId);
+      const { data, error } = await sb.from('memories').update(payload).eq('id', editingId).select('id').single();
       if (error) throw error;
+      try {
+        const bus = new BroadcastChannel('dolcetta-memory-live');
+        bus.postMessage({ type: 'memory-updated', id: data?.id ?? editingId });
+        bus.close();
+      } catch (_) {}
       setStatus('memory updated', 'ok');
     } else {
-      const { error } = await sb.from('memories').insert(payload);
+      const { data, error } = await sb.from('memories').insert(payload).select('id').single();
       if (error) throw error;
+      try {
+        const bus = new BroadcastChannel('dolcetta-memory-live');
+        bus.postMessage({ type: 'memory-added', id: data?.id ?? null });
+        bus.close();
+      } catch (_) {}
       setStatus('memory added', 'ok');
     }
     resetForm();
@@ -588,6 +598,11 @@ async function saveBuiltinConnections(){
       const { error: insertErr } = await sb.from('built_in_connections').insert(rows);
       if (insertErr) throw insertErr;
     }
+    try {
+      const bus = new BroadcastChannel('dolcetta-memory-live');
+      bus.postMessage({ type: 'connections-updated' });
+      bus.close();
+    } catch (_) {}
     setConnStatus('connections saved', 'ok');
     await loadMemories();
   } catch (err) {

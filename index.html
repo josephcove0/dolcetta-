@@ -735,7 +735,7 @@ function generateStarPositions(data) {
 const MEMORIES = generateStarPositions(MEMORIES_DATA);
 
 const CONFIG_KEY = 'dolcetta_supabase_config_v1';
-const DEFAULT_SUPABASE_URL = 'https://hlohijjsctkfdiyrgmuqp.supabase.co';
+const DEFAULT_SUPABASE_URL = 'https://hlohijsctkfdiyrgmuqp.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsb2hpanNjdGtmZGl5cmdtdXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNzE5OTYsImV4cCI6MjA4OTk0Nzk5Nn0.18_gY5ohSwQTRx0-HKdEhe9dvkPzl3SXANLv-EiTwDo';
 const DEFAULT_SUPABASE_TABLE = 'memories';
 const DEFAULT_CONNECTIONS_TABLE = 'built_in_connections';
@@ -749,7 +749,20 @@ function loadSupabaseConfig() {
     const raw = localStorage.getItem(CONFIG_KEY);
     if (!raw) return;
     const cfg = JSON.parse(raw) || {};
-    SUPABASE_URL = (cfg.url || DEFAULT_SUPABASE_URL).trim();
+    const legacyBadUrl = 'https://hlohijjsctkfdiyrgmuqp.supabase.co';
+    let nextUrl = (cfg.url || DEFAULT_SUPABASE_URL).trim();
+    if (nextUrl === legacyBadUrl) {
+      nextUrl = DEFAULT_SUPABASE_URL;
+      try {
+        localStorage.setItem(CONFIG_KEY, JSON.stringify({
+          ...cfg,
+          url: nextUrl,
+          key: (cfg.key || DEFAULT_SUPABASE_ANON_KEY).trim(),
+          table: (cfg.table || DEFAULT_SUPABASE_TABLE).trim() || DEFAULT_SUPABASE_TABLE
+        }));
+      } catch (_) {}
+    }
+    SUPABASE_URL = nextUrl;
     SUPABASE_ANON_KEY = (cfg.key || DEFAULT_SUPABASE_ANON_KEY).trim();
     SUPABASE_TABLE = (cfg.table || DEFAULT_SUPABASE_TABLE).trim() || DEFAULT_SUPABASE_TABLE;
   } catch (err) {
@@ -2624,6 +2637,9 @@ function startSupabaseRealtime(){
           refreshRemoteMemories(true);
         }
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: DEFAULT_CONNECTIONS_TABLE }, () => {
+        refreshRemoteMemories(true);
+      })
       .subscribe();
   } catch (err) {
     console.warn('Supabase realtime unavailable:', err);
@@ -2642,6 +2658,8 @@ function startCrossTabMemorySync(){
       setTimeout(() => refreshRemoteMemories(true), 1100);
     } else if (msg.type === 'memory-added' || msg.type === 'memory-updated') {
       if (msg.id !== undefined && msg.id !== null) rememberFreshRemoteRows(msg.id);
+      refreshRemoteMemories(true);
+    } else if (msg.type === 'connections-updated') {
       refreshRemoteMemories(true);
     }
   });
